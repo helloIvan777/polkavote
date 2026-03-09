@@ -9,7 +9,9 @@ export const POLKAVOTE_ABI = [
   {
     "inputs": [
       { "internalType": "string", "name": "_title", "type": "string" },
-      { "internalType": "string", "name": "_description", "type": "string" }
+      { "internalType": "string", "name": "_description", "type": "string" },
+      { "internalType": "string", "name": "_category", "type": "string" },
+      { "internalType": "uint256", "name": "_durationInDays", "type": "uint256" }
     ],
     "name": "addProposal",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
@@ -31,8 +33,10 @@ export const POLKAVOTE_ABI = [
       { "internalType": "address[]", "name": "proposers", "type": "address[]" },
       { "internalType": "string[]", "name": "titles", "type": "string[]" },
       { "internalType": "string[]", "name": "descriptions", "type": "string[]" },
+      { "internalType": "string[]", "name": "categories", "type": "string[]" },
       { "internalType": "uint256[]", "name": "voteCounts", "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "timestamps", "type": "uint256[]" }
+      { "internalType": "uint256[]", "name": "timestamps", "type": "uint256[]" },
+      { "internalType": "uint256[]", "name": "deadlines", "type": "uint256[]" }
     ],
     "stateMutability": "view",
     "type": "function"
@@ -99,7 +103,7 @@ export const POLKAVOTE_ABI = [
 // ⚠️  VERIFY THIS ADDRESS on https://moonbase.moonscan.io before deploying.
 // The address below was provided by the user. Note: a valid EVM address is
 // exactly 40 hex characters after '0x'. Double-check if calls fail.
-export const CONTRACT_ADDRESS = "0x51697a9052c90108c1a00054ff8CD8B4e1f67026";
+export const CONTRACT_ADDRESS = "0x5773B35548A7ed7B6F5DF5A05AfcA27D473A6D26";
 
 // Moonbase Alpha RPC endpoints — blastapi is primary for read-only (more stable),
 // official endpoint kept as signer provider fallback.
@@ -154,59 +158,29 @@ function createReadOnlyContract(rpcUrl) {
   return new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, provider);
 }
 
-export async function addProposal(title, description, signer) {
+export async function addProposal(title, description, category, durationInDays, signer) {
   console.log('========================================');
   console.log('[web3.js] addProposal called');
-  console.log('[web3.js] Title:', title);
-  console.log('[web3.js] Description:', description);
-  console.log('[web3.js] Has signer:', !!signer);
+  console.log('[web3.js] Title:', title, '| Category:', category, '| Duration:', durationInDays, 'days');
   console.log('[web3.js] Contract address:', CONTRACT_ADDRESS);
-  console.log('[web3.js] Signer type:', typeof signer);
-  console.log('[web3.js] Signer constructor:', signer?.constructor?.name);
   console.log('========================================');
 
   try {
-    // Validate inputs
-    if (!title || !title.trim()) {
-      const errorMsg = 'Title is empty or missing';
-      console.error('[web3.js] VALIDATION ERROR:', errorMsg);
-      throw new Error(errorMsg);
-    }
+    if (!title || !title.trim()) throw new Error('Title is empty or missing');
+    if (!description || !description.trim()) throw new Error('Description is empty or missing');
+    if (title.length > 200) throw new Error(`Title too long: ${title.length} characters (max 200)`);
+    if (description.length > 1000) throw new Error(`Description too long: ${description.length} characters (max 1000)`);
+    if (!category || !category.trim()) throw new Error('Category is required');
+    if (!durationInDays || durationInDays < 1 || durationInDays > 30) throw new Error('Duration must be 1–30 days');
+    if (!signer) throw new Error('Wallet not connected. Please connect your wallet first.');
 
-    if (!description || !description.trim()) {
-      const errorMsg = 'Description is empty or missing';
-      console.error('[web3.js] VALIDATION ERROR:', errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    if (title.length > 200) {
-      const errorMsg = `Title too long: ${title.length} characters (max 200)`;
-      console.error('[web3.js] VALIDATION ERROR:', errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    if (description.length > 1000) {
-      const errorMsg = `Description too long: ${description.length} characters (max 1000)`;
-      console.error('[web3.js] VALIDATION ERROR:', errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    if (!signer) {
-      const errorMsg = 'No signer provided. Wallet not connected.';
-      console.error('[web3.js] VALIDATION ERROR:', errorMsg);
-      throw new Error('Wallet not connected. Please connect your wallet first.');
-    }
-
-    console.log('[web3.js] Creating contract instance...');
     const contract = getContract(signer);
-    console.log('[web3.js] Contract instance:', contract?.address);
+    console.log('[web3.js] Sending transaction...');
 
-    console.log('[web3.js] Sending transaction with manual gas limit...');
-
-    // Use manual gas limit to avoid estimation failures on Moonbase Alpha
-    const tx = await contract.addProposal(title.trim(), description.trim(), {
-      gasLimit: 1000000
-    });
+    const tx = await contract.addProposal(
+      title.trim(), description.trim(), category.trim(), durationInDays,
+      { gasLimit: 1000000 }
+    );
 
     console.log('[web3.js] Transaction sent:', tx.hash);
     console.log('[web3.js] Transaction gas limit:', tx.gasLimit?.toString());
@@ -427,7 +401,7 @@ export async function fetchAllProposals() {
       const contract = createReadOnlyContract(rpcUrl);
       const result = await contract.getAllProposals();
 
-      const [ids, proposers, titles, descriptions, voteCounts, timestamps] = result;
+      const [ids, proposers, titles, descriptions, categories, voteCounts, timestamps, deadlines] = result;
 
       if (!ids || ids.length === 0) {
         console.log('[web3.js] Contract has 0 proposals — returning empty array.');
@@ -441,8 +415,10 @@ export async function fetchAllProposals() {
         proposer: proposers[index],
         title: titles[index],
         description: descriptions[index],
+        category: categories[index] || 'Tech',
         voteCount: Number(voteCounts[index]),
         timestamp: Number(timestamps[index]) * 1000,
+        deadline: Number(deadlines[index]) * 1000, // convert to ms
         hasVoted: false
       }));
     } catch (err) {

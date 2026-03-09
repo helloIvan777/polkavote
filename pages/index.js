@@ -7,7 +7,6 @@ import SubmitProposalModal from '../components/SubmitProposalModal';
 import { useWeb3 } from '../context/Web3Context';
 import {
   fetchAllProposals,
-  addProposal,
   voteOnProposal,
   checkVoted,
   formatVoteCount,
@@ -89,12 +88,25 @@ export default function HomePage() {
   const { account, isConnected, connectWallet, getSigner } = useWeb3();
 
   const [proposals, setProposals] = useState([]);
+  const [activeCategory, setActiveCategory] = useState('All');
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [votingStates, setVotingStates] = useState({});
   const [stats, setStats] = useState({ proposalCount: 0, totalVotes: 0 });
   const [error, setError] = useState(null);
+
+  // Derive filtered list — no extra fetch needed
+  const FILTER_TABS = ['All', 'Tech', 'Marketing', 'Ecosystem', 'Community'];
+  const ACTIVE_TAB_STYLES = {
+    All:       'bg-pink-500 text-white shadow-lg shadow-pink-500/25',
+    Tech:      'bg-blue-500 text-white shadow-lg shadow-blue-500/25',
+    Marketing: 'bg-pink-500 text-white shadow-lg shadow-pink-500/25',
+    Ecosystem: 'bg-green-500 text-white shadow-lg shadow-green-500/25',
+    Community: 'bg-purple-500 text-white shadow-lg shadow-purple-500/25',
+  };
+  const filteredProposals = activeCategory === 'All'
+    ? proposals
+    : proposals.filter(p => p.category === activeCategory);
 
   // Track latest account in a ref so loadProposals can read it
   // without being declared as an effect dependency.
@@ -220,47 +232,16 @@ export default function HomePage() {
     }
   };
 
-  // Handle submit proposal
-  const handleSubmitProposal = async (proposalData) => {
-    console.log('[HomePage] handleSubmitProposal called');
-    console.log('[HomePage] isConnected:', isConnected);
-    console.log('[HomePage] account:', account);
-    
-    if (!isConnected) {
-      console.log('[HomePage] Not connected, attempting to connect...');
-      await connectWallet();
-      return;
-    }
+  // Called by SubmitProposalModal after it has already sent the tx.
+  // The modal owns the full addProposal lifecycle — we just refresh the list.
+  const handleSubmitProposal = async (txResult) => {
+    console.log('[HomePage] Proposal submitted, refreshing list. TX:', txResult?.txHash);
 
-    try {
-      setIsSubmitting(true);
-      
-      const signer = await getSigner();
-      console.log('[HomePage] Got signer:', !!signer);
-      
-      if (!signer) {
-        throw new Error('No signer available. Please connect your wallet.');
-      }
-      
-      console.log('[HomePage] Calling addProposal...');
-      const result = await addProposal(
-        proposalData.title,
-        proposalData.description,
-        signer
-      );
-      
-      console.log('[HomePage] addProposal result:', result);
-
-      if (result.success) {
-        console.log('[HomePage] Proposal submitted successfully');
-        setIsModalOpen(false);
-        await loadProposals();
-      }
-    } catch (err) {
-      console.error('[HomePage] Submit proposal error:', err);
-      alert(`Failed to submit proposal: ${err.message || 'Unknown error'}`);
-    } finally {
-      setIsSubmitting(false);
+    if (txResult?.pending) {
+      // RPC slow — tx is in-flight; refresh after one block (~6 s on Moonbase)
+      setTimeout(() => loadProposals(), 6000);
+    } else {
+      await loadProposals();
     }
   };
 
@@ -322,6 +303,30 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            {FILTER_TABS.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveCategory(tab)}
+                className={`
+                  px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
+                  ${activeCategory === tab
+                    ? ACTIVE_TAB_STYLES[tab]
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:border-slate-500'
+                  }
+                `}
+              >
+                {tab}
+                {tab !== 'All' && (
+                  <span className="ml-1.5 text-xs opacity-75">
+                    ({proposals.filter(p => p.category === tab).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
           {/* Loading State */}
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
@@ -329,11 +334,26 @@ export default function HomePage() {
                 <ProposalCardSkeleton key={i} />
               ))}
             </div>
-          ) : proposals.length === 0 ? (
-            <EmptyState onAddIdea={() => setIsModalOpen(true)} />
+          ) : filteredProposals.length === 0 ? (
+            activeCategory === 'All' ? (
+              <EmptyState onAddIdea={() => setIsModalOpen(true)} />
+            ) : (
+              <div className="text-center py-16">
+                <p className="text-slate-400 text-lg">
+                  No <span className="text-white font-semibold">{activeCategory}</span> proposals yet.
+                </p>
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="mt-4 px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
+                    hover:from-pink-600 hover:to-pink-700 transition-all duration-200"
+                >
+                  Submit the first {activeCategory} idea
+                </button>
+              </div>
+            )
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-              {proposals.map((proposal) => (
+              {filteredProposals.map((proposal) => (
                 <ProposalCard
                   key={proposal.id}
                   proposal={proposal}
@@ -351,8 +371,7 @@ export default function HomePage() {
       <SubmitProposalModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSubmit={handleSubmitProposal}
-        isSubmitting={isSubmitting}
+        onSuccess={handleSubmitProposal}
       />
     </Layout>
   );
