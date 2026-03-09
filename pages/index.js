@@ -96,9 +96,15 @@ export default function HomePage() {
   const [stats, setStats] = useState({ proposalCount: 0, totalVotes: 0 });
   const [error, setError] = useState(null);
 
+  // Track latest account in a ref so loadProposals can read it
+  // without being declared as an effect dependency.
+  const accountRef = React.useRef(account);
+  useEffect(() => { accountRef.current = account; });
+
   // ── Proposal loader ──────────────────────────────────────────────────────
-  // Runs once on mount using the public JsonRpcProvider (blastapi).
-  // Does NOT depend on `account` so it never re-triggers on wallet changes.
+  // Stable (empty deps) — runs on mount AND whenever explicitly called
+  // (e.g., after a vote). Reads accountRef so it can apply hasVoted in
+  // the same pass even on navigation when account hasn't changed.
   const loadProposals = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -106,18 +112,33 @@ export default function HomePage() {
 
       const proposalsData = await fetchAllProposals();
 
-      // Derive stats locally — no extra RPC calls needed
-      const totalVotes = proposalsData.reduce((sum, p) => sum + p.voteCount, 0);
-      setStats({ proposalCount: proposalsData.length, totalVotes });
-      setProposals(proposalsData);
+      // If a wallet is already connected, fetch vote status in the same pass
+      // so hasVoted is correct immediately — no second render needed.
+      const currentAccount = accountRef.current;
+      let finalProposals = proposalsData;
+      if (currentAccount && proposalsData.length > 0) {
+        try {
+          finalProposals = await Promise.all(
+            proposalsData.map(async (p) => {
+              const hv = await checkVoted(p.id, currentAccount);
+              return { ...p, hasVoted: hv };
+            })
+          );
+        } catch (voteErr) {
+          console.warn('[HomePage] hasVoted check failed (non-fatal):', voteErr.message);
+        }
+      }
+
+      const totalVotes = finalProposals.reduce((sum, p) => sum + p.voteCount, 0);
+      setStats({ proposalCount: finalProposals.length, totalVotes });
+      setProposals(finalProposals);
     } catch (err) {
       console.error('[HomePage] loadProposals error:', err);
-      // Only show an error banner for true failures, not an empty contract
       setError(err.message || 'Failed to load proposals. Check the contract address and network.');
     } finally {
       setIsLoading(false);
     }
-  }, []); // stable — no account dependency
+  }, []); // stable — reads account via ref
 
   // Fetch proposals immediately on mount
   useEffect(() => {
@@ -125,8 +146,10 @@ export default function HomePage() {
   }, [loadProposals]);
 
   // ── Vote-status updater ──────────────────────────────────────────────────
-  // When the wallet connects/changes, overlay hasVoted status on existing
-  // proposals without triggering a full re-fetch or touching the error state.
+  // Runs when the wallet first connects or switches accounts.
+  // `loadProposals` already handles the case where account is present on
+  // mount/navigation, so this only needs to handle the "connected while
+  // proposals were already showing" transition.
   useEffect(() => {
     if (!account || proposals.length === 0) return;
 
@@ -135,8 +158,8 @@ export default function HomePage() {
       try {
         const updated = await Promise.all(
           proposals.map(async (p) => {
-            const hasVoted = await checkVoted(p.id, account);
-            return { ...p, hasVoted };
+            const hv = await checkVoted(p.id, account);
+            return { ...p, hasVoted: hv };
           })
         );
         if (!cancelled) setProposals(updated);
@@ -147,6 +170,7 @@ export default function HomePage() {
 
     return () => { cancelled = true; };
   }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Handle vote
   const handleVote = async (proposalId) => {
