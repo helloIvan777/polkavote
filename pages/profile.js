@@ -2,16 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { connectWallet, fetchAllProposals, checkVoted, truncateAddress } from '../utils/web3';
-import { POLKAVOTE_ADDRESS } from '../utils/web3';
+import { useWeb3 } from '../context/Web3Context';
+import { fetchAllProposals, checkVoted, truncateAddress } from '../utils/web3';
 
 /**
  * Profile Page
  * Shows user's profile information and activity
+ * 
+ * FIX: Uses useWeb3() hook from context instead of importing from utils/web3.js
  */
 export default function ProfilePage() {
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  // FIX: Use useWeb3 hook from context - this fixes "connectWallet is not a function" error
+  const { account, isConnected, connectWallet, isConnecting } = useWeb3();
+  
   const [userStats, setUserStats] = useState({
     proposalsCreated: 0,
     votesCast: 0,
@@ -19,23 +22,10 @@ export default function ProfilePage() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleConnectWallet = async () => {
-    try {
-      setIsConnecting(true);
-      const { address } = await connectWallet();
-      setWalletAddress(address);
-    } catch (err) {
-      console.error('Wallet connection error:', err);
-      alert(err.message || 'Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
   const loadUserStats = async (address) => {
     try {
       setIsLoading(true);
-      const allProposals = await fetchAllProposals(POLKAVOTE_ADDRESS);
+      const allProposals = await fetchAllProposals();
       
       // Find proposals created by user
       const userProposals = allProposals.filter(p => 
@@ -45,7 +35,7 @@ export default function ProfilePage() {
       // Count votes cast
       let votesCast = 0;
       for (const proposal of allProposals) {
-        const hasVoted = await checkVoted(proposal.id, address, POLKAVOTE_ADDRESS);
+        const hasVoted = await checkVoted(proposal.id, address);
         if (hasVoted) votesCast++;
       }
 
@@ -62,10 +52,10 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    if (walletAddress) {
-      loadUserStats(walletAddress);
+    if (account) {
+      loadUserStats(account);
     }
-  }, [walletAddress]);
+  }, [account]);
 
   // Generate avatar color from address
   const getAvatarColor = (address) => {
@@ -96,7 +86,7 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        {!walletAddress ? (
+        {!isConnected ? (
           /* Connect Wallet State */
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
             <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -109,7 +99,7 @@ export default function ProfilePage() {
               Connect to view your profile and activity
             </p>
             <button
-              onClick={handleConnectWallet}
+              onClick={connectWallet}
               disabled={isConnecting}
               className="px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
                 hover:from-pink-600 hover:to-pink-700 transition-all duration-200
@@ -136,22 +126,22 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          /* Profile Content */
+          /* Profile Content */}
           <>
             {/* Profile Card */}
             <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700/50 mb-6">
               <div className="flex items-center gap-4">
-                <div className={`w-20 h-20 bg-gradient-to-br ${getAvatarColor(walletAddress)} rounded-full flex items-center justify-center`}>
+                <div className={`w-20 h-20 bg-gradient-to-br ${getAvatarColor(account)} rounded-full flex items-center justify-center`}>
                   <span className="text-white text-2xl font-bold">
-                    {walletAddress.slice(2, 4).toUpperCase()}
+                    {account.slice(2, 4).toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1">
                   <h2 className="text-xl font-bold text-white mb-1">
-                    @{truncateAddress(walletAddress, 6, 4)}
+                    @{truncateAddress(account, 6, 4)}
                   </h2>
                   <p className="text-slate-400 text-sm font-mono">
-                    {walletAddress}
+                    {account}
                   </p>
                 </div>
                 <div className="px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full">

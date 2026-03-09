@@ -3,36 +3,26 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import SubmitProposalModal from '../components/SubmitProposalModal';
-import { connectWallet, submitProposal } from '../utils/web3';
-import { POLKAVOTE_ADDRESS } from '../utils/web3';
+import { useWeb3 } from '../context/Web3Context';
+import { addProposal } from '../utils/web3';
 
 /**
  * Submit Idea Page
- * Dedicated page for submitting new proposals
  */
 export default function SubmitPage() {
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  // Use useWeb3 hook from context
+  const { account, isConnected, connectWallet, getSigner, isConnecting } = useWeb3();
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
 
-  const handleConnectWallet = async () => {
-    try {
-      setIsConnecting(true);
-      const { address } = await connectWallet();
-      setWalletAddress(address);
-    } catch (err) {
-      console.error('Wallet connection error:', err);
-      alert(err.message || 'Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
   const handleSubmitProposal = async (proposalData) => {
-    if (!walletAddress) {
-      alert('Please connect your wallet first');
+    console.log('[SubmitPage] handleSubmitProposal called');
+    
+    if (!isConnected) {
+      console.log('[SubmitPage] Not connected, attempting to connect...');
+      await connectWallet();
       return;
     }
 
@@ -40,13 +30,21 @@ export default function SubmitPage() {
       setIsSubmitting(true);
       setSubmissionResult(null);
       
-      const { signer } = await connectWallet();
-      const result = await submitProposal(
+      const signer = await getSigner();
+      console.log('[SubmitPage] Got signer:', !!signer);
+      
+      if (!signer) {
+        throw new Error('No signer available. Please connect your wallet.');
+      }
+      
+      console.log('[SubmitPage] Calling addProposal...');
+      const result = await addProposal(
         proposalData.title,
         proposalData.description,
-        signer,
-        POLKAVOTE_ADDRESS
+        signer
       );
+      
+      console.log('[SubmitPage] addProposal result:', result);
 
       if (result.success) {
         setSubmissionResult({
@@ -57,10 +55,10 @@ export default function SubmitPage() {
         setIsModalOpen(false);
       }
     } catch (err) {
-      console.error('Submit proposal error:', err);
+      console.error('[SubmitPage] Submit proposal error:', err);
       setSubmissionResult({
         success: false,
-        message: 'Failed to submit proposal. Please try again.'
+        message: `Failed to submit proposal: ${err.message || 'Unknown error'}`
       });
     } finally {
       setIsSubmitting(false);
@@ -79,7 +77,7 @@ export default function SubmitPage() {
         </div>
 
         {/* Connect Wallet Card */}
-        {!walletAddress ? (
+        {!isConnected ? (
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
             <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,7 +89,7 @@ export default function SubmitPage() {
               You need to connect your MetaMask wallet to submit a proposal
             </p>
             <button
-              onClick={handleConnectWallet}
+              onClick={connectWallet}
               disabled={isConnecting}
               className="px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
                 hover:from-pink-600 hover:to-pink-700 transition-all duration-200
@@ -103,7 +101,7 @@ export default function SubmitPage() {
           </div>
         ) : (
           <>
-            {/* Success Message */}
+            {/* Result Message */}
             {submissionResult && (
               <div className={`mb-6 p-4 rounded-xl border ${
                 submissionResult.success 
@@ -129,7 +127,7 @@ export default function SubmitPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">Create New Proposal</h2>
-                  <p className="text-sm text-slate-400">Connected: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
+                  <p className="text-sm text-slate-400">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
                 </div>
               </div>
 

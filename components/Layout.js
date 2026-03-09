@@ -3,49 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-/**
- * PolkaVote Logo Component
- * SVG placeholder logo matching the wireframe design
- */
-function PolkaVoteLogo({ className = "w-10 h-10" }) {
-  return (
-    <svg 
-      className={className} 
-      viewBox="0 0 48 48" 
-      fill="none" 
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Background circle */}
-      <circle cx="24" cy="24" r="22" fill="#DB2777" />
-      
-      {/* Inner design - stylized PV */}
-      <path 
-        d="M14 32V16L20 28L26 16V32" 
-        stroke="white" 
-        strokeWidth="3" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
-      />
-      <path 
-        d="M30 16V32" 
-        stroke="white" 
-        strokeWidth="3" 
-        strokeLinecap="round"
-      />
-      <path 
-        d="M34 16L28 32" 
-        stroke="white" 
-        strokeWidth="3" 
-        strokeLinecap="round"
-      />
-      
-      {/* Decorative dots */}
-      <circle cx="12" cy="12" r="2" fill="white" />
-      <circle cx="36" cy="36" r="2" fill="white" />
-    </svg>
-  );
-}
+import { useWeb3 } from '../context/Web3Context';
+import { ConnectWalletButton, MobileConnectButton, PolkaVoteLogo } from '../components/Header';
 
 /**
  * Navigation Icons
@@ -84,7 +43,6 @@ function ProfileIcon({ className = "w-6 h-6" }) {
 
 /**
  * Nano Banana Integration Badge
- * Placeholder badge as shown in wireframe
  */
 function NanoBananaBadge() {
   return (
@@ -156,6 +114,11 @@ function DesktopSidebar({ pathname }) {
         })}
       </nav>
 
+      {/* Connect Wallet */}
+      <div className="p-4 border-t border-slate-700/50">
+        <ConnectWalletButton />
+      </div>
+
       {/* Nano Banana Badge */}
       <NanoBananaBadge />
     </aside>
@@ -199,7 +162,6 @@ function MobileBottomNav({ pathname }) {
 
 /**
  * Main Layout Component
- * Wraps all pages with consistent navigation
  */
 export default function Layout({ children }) {
   const pathname = usePathname();
@@ -218,6 +180,7 @@ export default function Layout({ children }) {
               <PolkaVoteLogo className="w-8 h-8" />
               <span className="text-lg font-bold text-white">PolkaVote</span>
             </Link>
+            <MobileConnectButton />
           </div>
         </header>
         

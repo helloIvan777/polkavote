@@ -1,6 +1,9 @@
 /**
- * PolkaVote Web3 Integration Utilities
+ * PolkaVote Web3 Contract Utilities
  * Uses ethers.js v6 for blockchain interactions
+ * 
+ * NOTE: For wallet connection, use the useWeb3() hook from context/Web3Context.js
+ * These utilities are for contract interactions only.
  */
 
 import { ethers } from 'ethers';
@@ -97,15 +100,14 @@ export const POLKAVOTE_ABI = [
   }
 ];
 
-// Contract Address - Replace with your deployed contract address
-export const POLKAVOTE_ADDRESS = "0xYOUR_CONTRACT_ADDRESS";
+// Contract Address - REPLACE WITH YOUR DEPLOYED CONTRACT ADDRESS
+export const CONTRACT_ADDRESS = "0xYOUR_CONTRACT_ADDRESS";
 
 // Default RPC URL (Polygon Mumbai testnet - change for production)
 const DEFAULT_RPC_URL = "https://rpc-mumbai.maticvigil.com";
 
 /**
- * Get a provider instance
- * @returns {ethers.Provider} The provider instance
+ * Get a read-only provider instance
  */
 export function getProvider() {
   if (typeof window !== 'undefined' && window.ethereum) {
@@ -115,73 +117,191 @@ export function getProvider() {
 }
 
 /**
- * Connect to MetaMask wallet
- * @returns {Promise<{signer: ethers.Signer, address: string, chainId: number}>}
+ * Get contract instance with signer for write operations
  */
-export async function connectWallet() {
-  if (typeof window === 'undefined') {
-    throw new Error('Not running in browser');
+export function getContract(signer) {
+  console.log('[web3.js] getContract called, has signer:', !!signer);
+  console.log('[web3.js] Contract address:', CONTRACT_ADDRESS);
+  
+  if (!signer) {
+    console.error('[web3.js] ERROR: No signer provided to getContract');
+    throw new Error('Signer is required for contract interactions');
+  }
+  
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, signer);
+  console.log('[web3.js] Contract instance created');
+  return contract;
+}
+
+/**
+ * Get read-only contract instance (for view functions)
+ */
+export function getReadOnlyContract() {
+  const provider = getProvider();
+  return new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, provider);
+}
+
+/**
+ * Add a new proposal to the contract
+ * INCLUDES DETAILED ERROR LOGGING FOR DEBUGGING
+ */
+export async function addProposal(title, description, signer) {
+  console.log('========================================');
+  console.log('[web3.js] addProposal called');
+  console.log('[web3.js] Title:', title);
+  console.log('[web3.js] Description:', description);
+  console.log('[web3.js] Has signer:', !!signer);
+  console.log('[web3.js] Contract address:', CONTRACT_ADDRESS);
+  console.log('========================================');
+
+  // Validate inputs
+  if (!title || !title.trim()) {
+    console.error('[web3.js] ERROR: Title is empty');
+    throw new Error('Title is required');
+  }
+  
+  if (!description || !description.trim()) {
+    console.error('[web3.js] ERROR: Description is empty');
+    throw new Error('Description is required');
   }
 
-  if (!window.ethereum) {
-    throw new Error('MetaMask is not installed. Please install MetaMask to use this feature.');
+  if (title.length > 200) {
+    console.error('[web3.js] ERROR: Title too long:', title.length);
+    throw new Error('Title must be 200 characters or less');
+  }
+
+  if (description.length > 1000) {
+    console.error('[web3.js] ERROR: Description too long:', description.length);
+    throw new Error('Description must be 1000 characters or less');
+  }
+
+  if (!signer) {
+    console.error('[web3.js] ERROR: No signer provided');
+    throw new Error('Wallet not connected. Please connect your wallet first.');
   }
 
   try {
-    // Request account access
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const address = await signer.getAddress();
-    const network = await provider.getNetwork();
+    console.log('[web3.js] Creating contract instance...');
+    const contract = getContract(signer);
+    
+    console.log('[web3.js] Estimating gas for addProposal...');
+    
+    // Send transaction
+    console.log('[web3.js] Sending transaction...');
+    const tx = await contract.addProposal(title.trim(), description.trim());
+    console.log('[web3.js] Transaction sent:', tx.hash);
+    console.log('[web3.js] Waiting for confirmation...');
+    
+    // Wait for transaction to be mined
+    const receipt = await tx.wait();
+    console.log('[web3.js] Transaction confirmed:', receipt.hash);
+    console.log('[web3.js] Block number:', receipt.blockNumber);
+    
+    // Find the ProposalCreated event
+    console.log('[web3.js] Looking for ProposalCreated event...');
+    const event = receipt.logs.find(log => {
+      try {
+        const parsed = contract.interface.parseLog(log);
+        console.log('[web3.js] Parsed log:', parsed?.name);
+        return parsed && parsed.name === 'ProposalCreated';
+      } catch (e) {
+        return false;
+      }
+    });
+    
+    const proposalId = event ? Number(event.args[0]) : null;
+    console.log('[web3.js] Proposal ID:', proposalId);
+    
+    console.log('========================================');
+    console.log('[web3.js] addProposal SUCCESS');
+    console.log('[web3.js] Proposal ID:', proposalId);
+    console.log('[web3.js] TX Hash:', receipt.hash);
+    console.log('========================================');
     
     return {
-      signer,
-      address,
-      chainId: Number(network.chainId)
+      success: true,
+      txHash: receipt.hash,
+      proposalId
     };
   } catch (error) {
+    console.error('========================================');
+    console.error('[web3.js] addProposal FAILED');
+    console.error('[web3.js] Error name:', error.name);
+    console.error('[web3.js] Error message:', error.message);
+    console.error('[web3.js] Error code:', error.code);
+    console.error('[web3.js] Full error:', error);
+    console.error('========================================');
+    
+    // Provide user-friendly error messages
     if (error.code === 4001) {
-      throw new Error('Connection rejected by user');
+      throw new Error('Transaction rejected by user');
     }
+    
+    if (error.message?.includes('insufficient funds')) {
+      throw new Error('Insufficient funds for gas. Please add ETH to your wallet.');
+    }
+    
+    if (error.message?.includes('contract not deployed')) {
+      throw new Error('Contract not deployed at the specified address. Please check the contract address.');
+    }
+    
+    if (error.message?.includes('CONTRACT_ADDRESS')) {
+      throw new Error('Contract address not configured. Please set CONTRACT_ADDRESS in utils/web3.js');
+    }
+    
     throw error;
   }
 }
 
 /**
- * Get the current signer
- * @returns {Promise<ethers.Signer|null>} The signer or null if not connected
+ * Vote on a proposal
  */
-export async function getSigner() {
-  if (typeof window === 'undefined' || !window.ethereum) {
-    return null;
+export async function voteOnProposal(proposalId, signer) {
+  console.log('[web3.js] voteOnProposal called, proposalId:', proposalId);
+
+  if (!signer) {
+    throw new Error('Wallet not connected');
   }
 
   try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const accounts = await provider.listAccounts();
-    if (accounts.length === 0) {
-      return null;
-    }
-    return await provider.getSigner();
+    const contract = getContract(signer);
+    const tx = await contract.vote(proposalId);
+    const receipt = await tx.wait();
+    
+    console.log('[web3.js] Vote confirmed:', receipt.hash);
+    
+    return {
+      success: true,
+      txHash: receipt.hash
+    };
   } catch (error) {
-    return null;
+    console.error('[web3.js] voteOnProposal error:', error);
+    
+    if (error.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    }
+    
+    if (error.message?.includes('Already voted')) {
+      throw new Error('You have already voted on this proposal');
+    }
+    
+    throw error;
   }
 }
 
 /**
  * Fetch all proposals from the contract
- * @param {string} contractAddress - The contract address
- * @returns {Promise<Array>} Array of proposal objects
  */
-export async function fetchAllProposals(contractAddress = POLKAVOTE_ADDRESS) {
+export async function fetchAllProposals() {
+  console.log('[web3.js] fetchAllProposals called');
+  
   try {
-    const provider = getProvider();
-    const contract = new ethers.Contract(contractAddress, POLKAVOTE_ABI, provider);
-    
+    const contract = getReadOnlyContract();
     const result = await contract.getAllProposals();
     
     const [ids, proposers, titles, descriptions, voteCounts, timestamps] = result;
+    
+    console.log('[web3.js] Fetched', ids.length, 'proposals');
     
     return ids.map((id, index) => ({
       id: Number(id),
@@ -193,130 +313,54 @@ export async function fetchAllProposals(contractAddress = POLKAVOTE_ADDRESS) {
       hasVoted: false // Will be set separately
     }));
   } catch (error) {
-    console.error('Error fetching proposals:', error);
-    throw error;
-  }
-}
-
-/**
- * Submit a new proposal
- * @param {string} title - The proposal title
- * @param {string} description - The proposal description
- * @param {ethers.Signer} signer - The signer instance
- * @param {string} contractAddress - The contract address
- * @returns {Promise<object>} Transaction receipt
- */
-export async function submitProposal(title, description, signer, contractAddress = POLKAVOTE_ADDRESS) {
-  try {
-    const contract = new ethers.Contract(contractAddress, POLKAVOTE_ABI, signer);
-    
-    const tx = await contract.addProposal(title, description);
-    const receipt = await tx.wait();
-    
-    // Find the ProposalCreated event
-    const event = receipt.logs.find(log => {
-      try {
-        const parsed = contract.interface.parseLog(log);
-        return parsed && parsed.name === 'ProposalCreated';
-      } catch {
-        return false;
-      }
-    });
-    
-    return {
-      success: true,
-      txHash: receipt.hash,
-      proposalId: event ? Number(event.args[0]) : null
-    };
-  } catch (error) {
-    console.error('Error submitting proposal:', error);
-    throw error;
-  }
-}
-
-/**
- * Vote on a proposal
- * @param {number} proposalId - The proposal ID to vote on
- * @param {ethers.Signer} signer - The signer instance
- * @param {string} contractAddress - The contract address
- * @returns {Promise<object>} Transaction receipt
- */
-export async function voteOnProposal(proposalId, signer, contractAddress = POLKAVOTE_ADDRESS) {
-  try {
-    const contract = new ethers.Contract(contractAddress, POLKAVOTE_ABI, signer);
-    
-    const tx = await contract.vote(proposalId);
-    const receipt = await tx.wait();
-    
-    return {
-      success: true,
-      txHash: receipt.hash
-    };
-  } catch (error) {
-    console.error('Error voting on proposal:', error);
+    console.error('[web3.js] fetchAllProposals error:', error);
     throw error;
   }
 }
 
 /**
  * Check if an address has voted on a proposal
- * @param {number} proposalId - The proposal ID
- * @param {string} voterAddress - The voter's address
- * @param {string} contractAddress - The contract address
- * @returns {Promise<boolean>} True if already voted
  */
-export async function checkVoted(proposalId, voterAddress, contractAddress = POLKAVOTE_ADDRESS) {
+export async function checkVoted(proposalId, voterAddress) {
   try {
-    const provider = getProvider();
-    const contract = new ethers.Contract(contractAddress, POLKAVOTE_ABI, provider);
-    
+    const contract = getReadOnlyContract();
     return await contract.checkVoted(proposalId, voterAddress);
   } catch (error) {
-    console.error('Error checking vote status:', error);
+    console.error('[web3.js] checkVoted error:', error);
     return false;
   }
 }
 
 /**
  * Get proposal count
- * @param {string} contractAddress - The contract address
- * @returns {Promise<number>} The number of proposals
  */
-export async function getProposalCount(contractAddress = POLKAVOTE_ADDRESS) {
+export async function getProposalCount() {
   try {
-    const provider = getProvider();
-    const contract = new ethers.Contract(contractAddress, POLKAVOTE_ABI, provider);
-    
+    const contract = getReadOnlyContract();
     const count = await contract.getProposalCount();
     return Number(count);
   } catch (error) {
-    console.error('Error getting proposal count:', error);
+    console.error('[web3.js] getProposalCount error:', error);
     return 0;
   }
 }
 
 /**
  * Get total votes across all proposals
- * @param {string} contractAddress - The contract address
- * @returns {Promise<number>} The total vote count
  */
-export async function getTotalVotes(contractAddress = POLKAVOTE_ADDRESS) {
+export async function getTotalVotes() {
   try {
-    const provider = getProvider();
-    const contract = new ethers.Contract(contractAddress, POLKAVOTE_ABI, provider);
-    
+    const contract = getReadOnlyContract();
     const total = await contract.getTotalVotes();
     return Number(total);
   } catch (error) {
-    console.error('Error getting total votes:', error);
+    console.error('[web3.js] getTotalVotes error:', error);
     return 0;
   }
 }
 
 /**
  * Format a large number with K/M suffix
- * @param {number} num - The number to format
- * @returns {string} Formatted string
  */
 export function formatVoteCount(num) {
   if (num >= 1000000) {
@@ -330,8 +374,6 @@ export function formatVoteCount(num) {
 
 /**
  * Format timestamp to relative time string
- * @param {number} timestamp - Unix timestamp in milliseconds
- * @returns {string} Relative time string
  */
 export function formatRelativeTime(timestamp) {
   const now = Date.now();
@@ -342,24 +384,14 @@ export function formatRelativeTime(timestamp) {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
   
-  if (days > 0) {
-    return `${days}d ago`;
-  }
-  if (hours > 0) {
-    return `${hours}h ago`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ago`;
-  }
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  if (minutes > 0) return `${minutes}m ago`;
   return 'Just now';
 }
 
 /**
  * Truncate an Ethereum address
- * @param {string} address - The full address
- * @param {number} start - Characters to show at start
- * @param {number} end - Characters to show at end
- * @returns {string} Truncated address
  */
 export function truncateAddress(address, start = 6, end = 4) {
   if (!address) return '';

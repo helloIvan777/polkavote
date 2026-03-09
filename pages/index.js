@@ -4,50 +4,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import ProposalCard from '../components/ProposalCard';
 import SubmitProposalModal from '../components/SubmitProposalModal';
+import { useWeb3 } from '../context/Web3Context';
 import {
-  connectWallet,
   fetchAllProposals,
-  submitProposal,
+  addProposal,
   voteOnProposal,
   checkVoted,
   getProposalCount,
   getTotalVotes,
-  formatVoteCount
+  formatVoteCount,
+  CONTRACT_ADDRESS
 } from '../utils/web3';
-import { POLKAVOTE_ADDRESS } from '../utils/web3';
-
-/**
- * Connect Wallet Button Component
- */
-function ConnectWalletButton({ address, onConnect, isConnecting }) {
-  if (address) {
-    return (
-      <div className="flex items-center gap-2 bg-slate-700/50 rounded-xl px-4 py-2">
-        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-        <span className="text-white text-sm font-medium">
-          {address.slice(0, 6)}...{address.slice(-4)}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={onConnect}
-      disabled={isConnecting}
-      className={`
-        px-4 py-2 rounded-xl font-medium text-sm
-        bg-gradient-to-r from-pink-500 to-pink-600 text-white
-        hover:from-pink-600 hover:to-pink-700
-        transition-all duration-200
-        disabled:opacity-50 disabled:cursor-not-allowed
-        hover:shadow-lg hover:shadow-pink-500/30
-      `}
-    >
-      {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-    </button>
-  );
-}
 
 /**
  * Stats Display Component
@@ -121,11 +88,12 @@ function EmptyState({ onAddIdea }) {
  * Main Home Page Component
  */
 export default function HomePage() {
-  // State
+  // Global Web3 state from context - FIXES "connectWallet is not a function" error
+  const { account, isConnected, connectWallet, getSigner } = useWeb3();
+  
+  // Local state
   const [proposals, setProposals] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [isConnecting, setIsConnecting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [votingStates, setVotingStates] = useState({});
@@ -140,18 +108,18 @@ export default function HomePage() {
 
       // Fetch proposals and stats in parallel
       const [proposalsData, proposalCount, totalVotes] = await Promise.all([
-        fetchAllProposals(POLKAVOTE_ADDRESS),
-        getProposalCount(POLKAVOTE_ADDRESS),
-        getTotalVotes(POLKAVOTE_ADDRESS)
+        fetchAllProposals(),
+        getProposalCount(),
+        getTotalVotes()
       ]);
 
       setStats({ proposalCount, totalVotes });
 
       // Check vote status for each proposal if wallet is connected
-      if (walletAddress) {
+      if (account) {
         const votedProposals = await Promise.all(
           proposalsData.map(async (proposal) => {
-            const hasVoted = await checkVoted(proposal.id, walletAddress, POLKAVOTE_ADDRESS);
+            const hasVoted = await checkVoted(proposal.id, account);
             return { ...proposal, hasVoted };
           })
         );
@@ -161,11 +129,11 @@ export default function HomePage() {
       }
     } catch (err) {
       console.error('Error loading proposals:', err);
-      setError('Failed to load proposals. Please make sure the contract is deployed and the address is correct.');
+      setError('Failed to load proposals. Please make sure the contract is deployed.');
     } finally {
       setIsLoading(false);
     }
-  }, [walletAddress]);
+  }, [account]);
 
   // Initial load
   useEffect(() => {
@@ -174,11 +142,11 @@ export default function HomePage() {
 
   // Refresh vote status when wallet connects
   useEffect(() => {
-    if (walletAddress && proposals.length > 0) {
+    if (account && proposals.length > 0) {
       const updateVoteStatus = async () => {
         const updatedProposals = await Promise.all(
           proposals.map(async (proposal) => {
-            const hasVoted = await checkVoted(proposal.id, walletAddress, POLKAVOTE_ADDRESS);
+            const hasVoted = await checkVoted(proposal.id, account);
             return { ...proposal, hasVoted };
           })
         );
@@ -186,34 +154,24 @@ export default function HomePage() {
       };
       updateVoteStatus();
     }
-  }, [walletAddress]);
-
-  // Handle wallet connection
-  const handleConnectWallet = async () => {
-    try {
-      setIsConnecting(true);
-      const { address } = await connectWallet();
-      setWalletAddress(address);
-    } catch (err) {
-      console.error('Wallet connection error:', err);
-      alert(err.message || 'Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
+  }, [account]);
 
   // Handle vote
   const handleVote = async (proposalId) => {
-    if (!walletAddress) {
-      alert('Please connect your wallet first');
+    if (!isConnected) {
+      await connectWallet();
       return;
     }
 
     try {
       setVotingStates(prev => ({ ...prev, [proposalId]: true }));
       
-      const { signer } = await connectWallet();
-      await voteOnProposal(proposalId, signer, POLKAVOTE_ADDRESS);
+      const signer = await getSigner();
+      if (!signer) {
+        throw new Error('No signer available');
+      }
+      
+      await voteOnProposal(proposalId, signer);
       
       // Update local state
       setProposals(prev => prev.map(p => 
@@ -223,7 +181,7 @@ export default function HomePage() {
       ));
       
       // Refresh stats
-      const totalVotes = await getTotalVotes(POLKAVOTE_ADDRESS);
+      const totalVotes = await getTotalVotes();
       setStats(prev => ({ ...prev, totalVotes }));
     } catch (err) {
       console.error('Vote error:', err);
@@ -239,29 +197,43 @@ export default function HomePage() {
 
   // Handle submit proposal
   const handleSubmitProposal = async (proposalData) => {
-    if (!walletAddress) {
-      alert('Please connect your wallet first');
+    console.log('[HomePage] handleSubmitProposal called');
+    console.log('[HomePage] isConnected:', isConnected);
+    console.log('[HomePage] account:', account);
+    
+    if (!isConnected) {
+      console.log('[HomePage] Not connected, attempting to connect...');
+      await connectWallet();
       return;
     }
 
     try {
       setIsSubmitting(true);
       
-      const { signer } = await connectWallet();
-      const result = await submitProposal(
+      const signer = await getSigner();
+      console.log('[HomePage] Got signer:', !!signer);
+      
+      if (!signer) {
+        throw new Error('No signer available. Please connect your wallet.');
+      }
+      
+      console.log('[HomePage] Calling addProposal...');
+      const result = await addProposal(
         proposalData.title,
         proposalData.description,
-        signer,
-        POLKAVOTE_ADDRESS
+        signer
       );
+      
+      console.log('[HomePage] addProposal result:', result);
 
       if (result.success) {
+        console.log('[HomePage] Proposal submitted successfully');
         setIsModalOpen(false);
         await loadProposals();
       }
     } catch (err) {
-      console.error('Submit proposal error:', err);
-      alert('Failed to submit proposal. Please try again.');
+      console.error('[HomePage] Submit proposal error:', err);
+      alert(`Failed to submit proposal: ${err.message || 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -284,26 +256,19 @@ export default function HomePage() {
               />
             </div>
 
-            {/* Right Side - Actions */}
-            <div className="flex items-center gap-3">
-              <ConnectWalletButton 
-                address={walletAddress}
-                onConnect={handleConnectWallet}
-                isConnecting={isConnecting}
-              />
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-pink-600 
-                  text-white rounded-xl font-medium text-sm
-                  hover:from-pink-600 hover:to-pink-700 transition-all duration-200
-                  hover:shadow-lg hover:shadow-pink-500/30"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                ADD YOUR IDEA
-              </button>
-            </div>
+            {/* Right Side - Add Idea Button (Desktop) */}
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-pink-600 
+                text-white rounded-xl font-medium text-sm
+                hover:from-pink-600 hover:to-pink-700 transition-all duration-200
+                hover:shadow-lg hover:shadow-pink-500/30"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              ADD YOUR IDEA
+            </button>
           </div>
 
           {/* Mobile Add Idea Button */}

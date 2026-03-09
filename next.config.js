@@ -2,21 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  
-  // Enable experimental features if needed
-  experimental: {
-    // Add any experimental features here
-  },
 
   // Environment variables
   env: {
-    // Add public environment variables here
     NEXT_PUBLIC_POLKAVOTE_ADDRESS: process.env.NEXT_PUBLIC_POLKAVOTE_ADDRESS || '0xYOUR_CONTRACT_ADDRESS',
-  },
-
-  // Images configuration
-  images: {
-    domains: [],
   },
 
   // Webpack configuration for ethers.js

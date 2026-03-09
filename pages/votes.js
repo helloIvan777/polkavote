@@ -3,41 +3,28 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import ProposalCard from '../components/ProposalCard';
-import { connectWallet, fetchAllProposals, checkVoted, getProposalCount, getTotalVotes } from '../utils/web3';
-import { POLKAVOTE_ADDRESS } from '../utils/web3';
+import { useWeb3 } from '../context/Web3Context';
+import { fetchAllProposals, checkVoted } from '../utils/web3';
 
 /**
  * My Votes Page
- * Shows proposals the user has voted on
  */
 export default function VotesPage() {
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  // Use useWeb3 hook from context
+  const { account, isConnected, connectWallet, isConnecting } = useWeb3();
+  
   const [votedProposals, setVotedProposals] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [votingStates, setVotingStates] = useState({});
 
-  const handleConnectWallet = async () => {
-    try {
-      setIsConnecting(true);
-      const { address } = await connectWallet();
-      setWalletAddress(address);
-    } catch (err) {
-      console.error('Wallet connection error:', err);
-      alert(err.message || 'Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
   const loadVotedProposals = async (address) => {
     try {
       setIsLoading(true);
-      const allProposals = await fetchAllProposals(POLKAVOTE_ADDRESS);
+      const allProposals = await fetchAllProposals();
       
       const voted = await Promise.all(
         allProposals.map(async (proposal) => {
-          const hasVoted = await checkVoted(proposal.id, address, POLKAVOTE_ADDRESS);
+          const hasVoted = await checkVoted(proposal.id, address);
           return { ...proposal, hasVoted };
         })
       );
@@ -51,10 +38,10 @@ export default function VotesPage() {
   };
 
   useEffect(() => {
-    if (walletAddress) {
-      loadVotedProposals(walletAddress);
+    if (account) {
+      loadVotedProposals(account);
     }
-  }, [walletAddress]);
+  }, [account]);
 
   return (
     <Layout>
@@ -67,7 +54,7 @@ export default function VotesPage() {
           </p>
         </div>
 
-        {!walletAddress ? (
+        {!isConnected ? (
           /* Connect Wallet State */
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
             <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -80,7 +67,7 @@ export default function VotesPage() {
               Connect to see your voting history
             </p>
             <button
-              onClick={handleConnectWallet}
+              onClick={connectWallet}
               disabled={isConnecting}
               className="px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
                 hover:from-pink-600 hover:to-pink-700 transition-all duration-200
