@@ -179,7 +179,7 @@ export async function addProposal(title, description, category, durationInDays, 
 
     const tx = await contract.addProposal(
       title.trim(), description.trim(), category.trim(), durationInDays,
-      { gasLimit: 1000000 }
+      { gasLimit: 3000000 }
     );
 
     console.log('[web3.js] Transaction sent:', tx.hash);
@@ -327,7 +327,7 @@ export async function voteOnProposal(proposalId, signer) {
     const contract = getContract(signer);
 
     const tx = await contract.vote(proposalId, {
-      gasLimit: 500000
+      gasLimit: 1000000
     });
 
     console.log('[web3.js] Vote transaction sent:', tx.hash);

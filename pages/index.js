@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import ProposalCard from '../components/ProposalCard';
+import ProposalDetailModal from '../components/ProposalDetailModal';
 import SubmitProposalModal from '../components/SubmitProposalModal';
 import { useWeb3 } from '../context/Web3Context';
 import {
@@ -89,6 +90,7 @@ export default function HomePage() {
 
   const [proposals, setProposals] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [selectedProposal, setSelectedProposal] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [votingStates, setVotingStates] = useState({});
@@ -108,10 +110,19 @@ export default function HomePage() {
     ? proposals
     : proposals.filter(p => p.category === activeCategory);
 
-  // Track latest account in a ref so loadProposals can read it
-  // without being declared as an effect dependency.
+  // Track latest account in a ref (for loadProposals)
   const accountRef = React.useRef(account);
   useEffect(() => { accountRef.current = account; });
+
+  // Stores a proposalId to vote on automatically once the wallet connects.
+  // Using a ref avoids stale-closure issues inside the account effect.
+  const pendingVoteRef = React.useRef(null);
+
+  // Derive selectedProposal from live proposals array so vote counts
+  // and hasVoted flags stay current inside the modal after any refresh.
+  const currentSelectedProposal = selectedProposal
+    ? proposals.find(p => p.id === selectedProposal.id) || selectedProposal
+    : null;
 
   // ── Proposal loader ──────────────────────────────────────────────────────
   // Stable (empty deps) — runs on mount AND whenever explicitly called
@@ -183,11 +194,24 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-vote after wallet connects ──────────────────────────────────────
+  // If the user clicked Vote while disconnected we queued the proposalId in
+  // pendingVoteRef. As soon as account is set, fire the vote automatically.
+  useEffect(() => {
+    if (!account || pendingVoteRef.current === null) return;
+    const id = pendingVoteRef.current;
+    pendingVoteRef.current = null;
+    handleVote(id);
+  }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Handle vote
   const handleVote = async (proposalId) => {
     if (!isConnected) {
-      await connectWallet();
+      // Save the intent and open the wallet selector.
+      // The account effect below will fire the vote once connected.
+      pendingVoteRef.current = proposalId;
+      connectWallet();
       return;
     }
 
@@ -358,6 +382,7 @@ export default function HomePage() {
                   key={proposal.id}
                   proposal={proposal}
                   onVote={handleVote}
+                  onCardClick={setSelectedProposal}
                   hasVoted={proposal.hasVoted}
                   isVoting={votingStates[proposal.id]}
                 />
@@ -373,6 +398,17 @@ export default function HomePage() {
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleSubmitProposal}
       />
+
+      {/* Proposal Detail Modal */}
+      {currentSelectedProposal && (
+        <ProposalDetailModal
+          proposal={currentSelectedProposal}
+          onClose={() => setSelectedProposal(null)}
+          onVote={(id) => handleVote(id)}
+          hasVoted={currentSelectedProposal.hasVoted}
+          isVoting={votingStates[currentSelectedProposal.id]}
+        />
+      )}
     </Layout>
   );
 }
