@@ -274,6 +274,13 @@ export function Web3Provider({ children }) {
    * @param {string} type - 'metamask' or 'phantom'
    */
   const connectWallet = useCallback(async (type) => {
+    // If already connected and no explicit wallet type requested, do nothing —
+    // this prevents navigation / indirect calls from popping the modal.
+    if (isConnected && !['metamask', 'phantom'].includes(type)) {
+      console.log('[Web3Context] Already connected, skipping modal');
+      return null;
+    }
+
     console.log('[Web3Context] connectWallet called with type:', type);
     setIsConnecting(true);
 
@@ -283,7 +290,7 @@ export function Web3Provider({ children }) {
       } else if (type === 'phantom') {
         await connectPhantomEVM();
       } else {
-        // Show wallet selection modal
+        // No valid type supplied — show the wallet selection modal
         setShowWalletModal(true);
         return null;
       }
@@ -299,7 +306,7 @@ export function Web3Provider({ children }) {
     } finally {
       setIsConnecting(false);
     }
-  }, [connectMetaMask, connectPhantomEVM, account, walletType]);
+  }, [isConnected, connectMetaMask, connectPhantomEVM, account, walletType]);
 
   const disconnectWallet = useCallback(() => {
     console.log('[Web3Context] Disconnecting wallet...');
@@ -410,31 +417,42 @@ export function Web3Provider({ children }) {
     }
   }, [getMetaMaskProvider, getPhantomEVMProvider]);
 
+  // Keep a ref to the latest live values so event handlers never go stale
+  // and never need to change identity (which would re-trigger effects).
+  const stateRef = React.useRef({ account, provider, walletType, disconnectWallet });
+  useEffect(() => {
+    stateRef.current = { account, provider, walletType, disconnectWallet };
+  });
+
   /**
-   * Handle account changes
+   * Handle account changes — stable identity (no deps on mutable state).
+   * Reads live values via stateRef so it always sees the latest account.
    */
   const handleAccountsChanged = useCallback((accounts) => {
     console.log('[Web3Context] accountsChanged event:', accounts);
+    const { account: currentAccount, provider: currentProvider, walletType: currentWalletType, disconnectWallet: doDisconnect } = stateRef.current;
 
     if (accounts.length === 0) {
       console.log('[Web3Context] User disconnected from wallet');
-      disconnectWallet();
-    } else if (accounts[0] !== account) {
+      doDisconnect();
+    } else if (accounts[0] !== currentAccount) {
       const newAddress = accounts[0];
       console.log('[Web3Context] Account switched to:', newAddress);
       setAccount(newAddress);
+      // Update localStorage to keep the new account's session alive
+      localStorage.setItem(STORAGE_KEY, 'true');
 
-      if (walletType === 'metamask' && provider) {
-        provider.getSigner().then(newSigner => {
+      if (currentWalletType === 'metamask' && currentProvider) {
+        currentProvider.getSigner().then(newSigner => {
           setSigner(newSigner);
-          console.log('[Web3Context] Signer updated');
+          console.log('[Web3Context] Signer updated after account switch');
         });
       }
     }
-  }, [account, provider, walletType, disconnectWallet]);
+  }, []); // stable — reads via ref
 
   /**
-   * Handle chain changes
+   * Handle chain changes — stable identity.
    */
   const handleChainChanged = useCallback((newChainId) => {
     console.log('[Web3Context] chainChanged event:', newChainId);
@@ -443,27 +461,35 @@ export function Web3Provider({ children }) {
   }, []);
 
   /**
-   * Setup event listeners on mount
+   * EFFECT 1 — Run once on mount: silently restore any prior connection.
+   * Must NOT re-run when account/provider change, only on first mount.
+   */
+  const didCheckConnection = React.useRef(false);
+  useEffect(() => {
+    if (didCheckConnection.current) return;
+    didCheckConnection.current = true;
+    console.log('[Web3Context] Mount: checking for existing connection...');
+    checkExistingConnection();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * EFFECT 2 — Attach wallet event listeners once on mount.
+   * Uses stable callbacks (handleAccountsChanged / handleChainChanged)
+   * so this never tears down and re-registers unnecessarily.
    */
   useEffect(() => {
-    console.log('[Web3Context] Provider mounted, setting up listeners');
+    if (typeof window === 'undefined') return;
 
-    checkExistingConnection();
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+      console.log('[Web3Context] window.ethereum event listeners attached');
+    }
 
-    if (typeof window !== 'undefined') {
-      // MetaMask events
-      if (window.ethereum) {
-        window.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.ethereum.on('chainChanged', handleChainChanged);
-        console.log('[Web3Context] Ethereum event listeners attached');
-      }
-
-      // Phantom EVM events
-      if (window.phantom?.ethereum) {
-        window.phantom.ethereum.on('accountsChanged', handleAccountsChanged);
-        window.phantom.ethereum.on('chainChanged', handleChainChanged);
-        console.log('[Web3Context] Phantom EVM event listeners attached');
-      }
+    if (window.phantom?.ethereum) {
+      window.phantom.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.phantom.ethereum.on('chainChanged', handleChainChanged);
+      console.log('[Web3Context] Phantom EVM event listeners attached');
     }
 
     return () => {
@@ -477,7 +503,7 @@ export function Web3Provider({ children }) {
       }
       console.log('[Web3Context] Event listeners removed');
     };
-  }, [checkExistingConnection, handleAccountsChanged, handleChainChanged]);
+  }, [handleAccountsChanged, handleChainChanged]); // both are stable, runs once
 
   /**
    * Get signer for contract interactions

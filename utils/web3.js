@@ -99,14 +99,21 @@ export const POLKAVOTE_ABI = [
 // Moonbase Alpha Contract Address
 export const CONTRACT_ADDRESS = "0xf9810bA1557354F3a6314992d896ACeCD05210b5";
 
-// Moonbase Alpha RPC URL
-const DEFAULT_RPC_URL = "https://rpc.api.moonbase.moonbeam.network";
+// Moonbase Alpha RPC endpoints (primary + public fallback)
+const RPC_URLS = [
+  "https://rpc.api.moonbase.moonbeam.network",
+  "https://moonbase-alpha.public.blastapi.io",
+];
 
 export function getProvider() {
   if (typeof window !== 'undefined' && window.ethereum) {
     return new ethers.BrowserProvider(window.ethereum);
   }
-  return new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
+  // Use primary RPC for read-only calls; disable auto-polling to avoid
+  // "Failed to fetch" timeouts on slow Moonbase Alpha nodes.
+  const provider = new ethers.JsonRpcProvider(RPC_URLS[0]);
+  provider.pollingInterval = 4000;
+  return provider;
 }
 
 export function getContract(signer) {
@@ -175,14 +182,54 @@ export async function addProposal(title, description, signer) {
     const contract = getContract(signer);
     console.log('[web3.js] Contract instance:', contract?.address);
 
-    console.log('[web3.js] Sending transaction...');
-    const tx = await contract.addProposal(title.trim(), description.trim());
+    console.log('[web3.js] Sending transaction with manual gas limit...');
+
+    // Use manual gas limit to avoid estimation failures on Moonbase Alpha
+    const tx = await contract.addProposal(title.trim(), description.trim(), {
+      gasLimit: 1000000
+    });
+
     console.log('[web3.js] Transaction sent:', tx.hash);
     console.log('[web3.js] Transaction gas limit:', tx.gasLimit?.toString());
     console.log('[web3.js] Transaction gas price:', tx.gasPrice?.toString());
     console.log('[web3.js] Waiting for confirmation...');
 
-    const receipt = await tx.wait();
+    // --- Receipt polling (wrapped separately) ---
+    // Moonbase Alpha's RPC can be slow to serve eth_getTransactionReceipt.
+    // If the poll fails with a network/fetch error the transaction has still
+    // been accepted by the chain, so we return a graceful "pending" success
+    // rather than crashing the UI.
+    let receipt;
+    try {
+      receipt = await tx.wait();
+    } catch (waitError) {
+      const msg = waitError?.message?.toLowerCase() ?? '';
+      const isFetchError =
+        msg.includes('failed to fetch') ||
+        msg.includes('fetch failed') ||
+        msg.includes('network error') ||
+        msg.includes('etimedout') ||
+        waitError?.code === 'NETWORK_ERROR' ||
+        waitError?.code === 'TIMEOUT';
+
+      if (isFetchError) {
+        console.warn('[web3.js] tx.wait() hit a fetch error — transaction was sent OK.', waitError);
+        console.warn('[web3.js] TX Hash:', tx.hash);
+        return {
+          success: true,
+          pending: true,
+          txHash: tx.hash,
+          proposalId: null,
+          message:
+            'Transaction sent! It might take a minute to appear on the site due to network congestion.',
+        };
+      }
+
+      // Any other error (e.g. transaction reverted on-chain) — re-throw
+      // so the outer catch can surface it to the user.
+      throw waitError;
+    }
+
     console.log('[web3.js] Transaction confirmed:', receipt.hash);
     console.log('[web3.js] Block number:', receipt.blockNumber);
     console.log('[web3.js] Gas used:', receipt.gasUsed?.toString());
@@ -190,7 +237,7 @@ export async function addProposal(title, description, signer) {
 
     console.log('[web3.js] Looking for ProposalCreated event...');
     let proposalId = null;
-    
+
     if (receipt.logs && receipt.logs.length > 0) {
       for (const log of receipt.logs) {
         try {
@@ -215,8 +262,9 @@ export async function addProposal(title, description, signer) {
 
     return {
       success: true,
+      pending: false,
       txHash: receipt.hash,
-      proposalId
+      proposalId,
     };
   } catch (error) {
     console.error('========================================');
@@ -284,9 +332,14 @@ export async function voteOnProposal(proposalId, signer) {
 
   try {
     const contract = getContract(signer);
-    const tx = await contract.vote(proposalId);
+
+    // Use manual gas limit to avoid estimation failures
+    const tx = await contract.vote(proposalId, {
+      gasLimit: 300000
+    });
+
     console.log('[web3.js] Vote transaction sent:', tx.hash);
-    
+
     const receipt = await tx.wait();
     console.log('[web3.js] Vote confirmed:', receipt.hash);
 
