@@ -1,0 +1,49 @@
+{
+  "name": "polkavote",
+  "version": "1.0.0",
+  "description": "A decentralized idea board for the Polkadot ecosystem",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "compile:contract": "solc contracts/PolkaVote.sol --bin --abi --out-dir build"
+  },
+  "dependencies": {
+    "assert": "^2.1.0",
+    "crypto-browserify": "^3.12.1",
+    "ethers": "^6.9.0",
+    "https-browserify": "^1.0.0",
+    "next": "^14.0.4",
+    "os-browserify": "^0.3.0",
+    "path-browserify": "^1.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "url": "^0.11.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.42",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "polkadot",
+    "web3",
+    "blockchain",
+    "voting",
+    "governance",
+    "ethereum",
+    "evm"
+  ],
+  "author": "",
+  "license": "MIT"
+}
