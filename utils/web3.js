@@ -96,21 +96,33 @@ export const POLKAVOTE_ABI = [
   }
 ];
 
-// Moonbase Alpha Contract Address
-export const CONTRACT_ADDRESS = "0xf9810bA1557354F3a6314992d896ACeCD05210b5";
+// ⚠️  VERIFY THIS ADDRESS on https://moonbase.moonscan.io before deploying.
+// The address below was provided by the user. Note: a valid EVM address is
+// exactly 40 hex characters after '0x'. Double-check if calls fail.
+export const CONTRACT_ADDRESS = "0x51697a9052c90108c1a00054ff8CD8B4e1f67026";
 
-// Moonbase Alpha RPC endpoints (primary + public fallback)
+// Moonbase Alpha RPC endpoints — blastapi is primary for read-only (more stable),
+// official endpoint kept as signer provider fallback.
 const RPC_URLS = [
-  "https://rpc.api.moonbase.moonbeam.network",
   "https://moonbase-alpha.public.blastapi.io",
+  "https://rpc.api.moonbase.moonbeam.network",
 ];
 
+/** BrowserProvider (wallet) when available, else JsonRpc fallback. */
 export function getProvider() {
   if (typeof window !== 'undefined' && window.ethereum) {
     return new ethers.BrowserProvider(window.ethereum);
   }
-  // Use primary RPC for read-only calls; disable auto-polling to avoid
-  // "Failed to fetch" timeouts on slow Moonbase Alpha nodes.
+  const provider = new ethers.JsonRpcProvider(RPC_URLS[1]);
+  provider.pollingInterval = 4000;
+  return provider;
+}
+
+/**
+ * Always returns a stable JsonRpcProvider for read-only calls.
+ * Never depends on window.ethereum — works before the extension is ready.
+ */
+export function getReadOnlyProvider() {
   const provider = new ethers.JsonRpcProvider(RPC_URLS[0]);
   provider.pollingInterval = 4000;
   return provider;
@@ -131,7 +143,14 @@ export function getContract(signer) {
 }
 
 export function getReadOnlyContract() {
-  const provider = getProvider();
+  const provider = getReadOnlyProvider();
+  return new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, provider);
+}
+
+/** Create a read-only contract bound to a specific RPC URL (used for fallback). */
+function createReadOnlyContract(rpcUrl) {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  provider.pollingInterval = 4000;
   return new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, provider);
 }
 
@@ -333,36 +352,59 @@ export async function voteOnProposal(proposalId, signer) {
   try {
     const contract = getContract(signer);
 
-    // Use manual gas limit to avoid estimation failures
     const tx = await contract.vote(proposalId, {
-      gasLimit: 300000
+      gasLimit: 500000
     });
 
     console.log('[web3.js] Vote transaction sent:', tx.hash);
 
-    const receipt = await tx.wait();
-    console.log('[web3.js] Vote confirmed:', receipt.hash);
+    // --- Receipt polling (separate try/catch) ---
+    // Moonbase Alpha's RPC can time out on eth_getTransactionReceipt even
+    // when the tx was accepted. Treat fetch/timeout as a pending success
+    // so the UI doesn't show a false "Failed" alert.
+    let receipt;
+    try {
+      receipt = await tx.wait();
+    } catch (waitError) {
+      const msg = waitError?.message?.toLowerCase() ?? '';
+      const isFetchError =
+        msg.includes('failed to fetch') ||
+        msg.includes('fetch failed') ||
+        msg.includes('network error') ||
+        msg.includes('etimedout') ||
+        waitError?.code === 'NETWORK_ERROR' ||
+        waitError?.code === 'TIMEOUT';
 
+      if (isFetchError) {
+        console.warn('[web3.js] tx.wait() timed out — vote was sent OK. TX:', tx.hash);
+        return {
+          success: true,
+          pending: true,
+          txHash: tx.hash,
+          message: 'Vote sent! It will appear after the next block.',
+        };
+      }
+      // On-chain revert or other hard error — surface it
+      throw waitError;
+    }
+
+    console.log('[web3.js] Vote confirmed:', receipt.hash);
     return {
       success: true,
-      txHash: receipt.hash
+      pending: false,
+      txHash: receipt.hash,
     };
   } catch (error) {
     console.error('[web3.js] voteOnProposal error:', error);
-    console.error('[web3.js] Error name:', error.name);
-    console.error('[web3.js] Error message:', error.message);
-    console.error('[web3.js] Error code:', error.code);
 
     if (error.code === 4001) {
       throw new Error('Transaction rejected by user');
     }
-
     if (error.message?.includes('Already voted')) {
       throw new Error('You have already voted on this proposal');
     }
-
     if (error.message?.includes('insufficient funds')) {
-      throw new Error('Insufficient funds for gas');
+      throw new Error('Insufficient funds for gas. Add DEV tokens to your wallet.');
     }
 
     throw error;
@@ -370,41 +412,78 @@ export async function voteOnProposal(proposalId, signer) {
 }
 
 export async function fetchAllProposals() {
+  console.log('========================================');
   console.log('[web3.js] fetchAllProposals called');
+  console.log('[web3.js] Contract Address:', CONTRACT_ADDRESS);
+  console.log('[web3.js] Will try RPCs:', RPC_URLS);
+  console.log('========================================');
 
-  try {
-    const contract = getReadOnlyContract();
-    const result = await contract.getAllProposals();
+  let lastError;
 
-    const [ids, proposers, titles, descriptions, voteCounts, timestamps] = result;
+  // Try each RPC endpoint in sequence — return on the first that works.
+  for (const rpcUrl of RPC_URLS) {
+    try {
+      console.log('[web3.js] Trying RPC:', rpcUrl);
+      const contract = createReadOnlyContract(rpcUrl);
+      const result = await contract.getAllProposals();
 
-    console.log('[web3.js] Fetched', ids.length, 'proposals');
+      const [ids, proposers, titles, descriptions, voteCounts, timestamps] = result;
 
-    return ids.map((id, index) => ({
-      id: Number(id),
-      proposer: proposers[index],
-      title: titles[index],
-      description: descriptions[index],
-      voteCount: Number(voteCounts[index]),
-      timestamp: Number(timestamps[index]) * 1000,
-      hasVoted: false
-    }));
-  } catch (error) {
-    console.error('[web3.js] fetchAllProposals error:', error);
-    console.error('[web3.js] Error name:', error.name);
-    console.error('[web3.js] Error message:', error.message);
-    throw error;
+      if (!ids || ids.length === 0) {
+        console.log('[web3.js] Contract has 0 proposals — returning empty array.');
+        return [];
+      }
+
+      console.log('[web3.js] Fetched', ids.length, 'proposals via', rpcUrl);
+
+      return ids.map((id, index) => ({
+        id: Number(id),
+        proposer: proposers[index],
+        title: titles[index],
+        description: descriptions[index],
+        voteCount: Number(voteCounts[index]),
+        timestamp: Number(timestamps[index]) * 1000,
+        hasVoted: false
+      }));
+    } catch (err) {
+      console.warn('[web3.js] RPC failed:', rpcUrl, '—', err.message);
+      lastError = err;
+      // Continue to next RPC
+    }
   }
+
+  // All RPCs failed — surface a clear error
+  console.error('========================================');
+  console.error('[web3.js] fetchAllProposals FAILED on all RPCs');
+  console.error('[web3.js] Contract Address:', CONTRACT_ADDRESS);
+  console.error('[web3.js] Last error:', lastError?.message);
+  console.error('========================================');
+
+  const msg = lastError?.message?.toLowerCase() ?? '';
+  if (msg.includes('bad address') || msg.includes('invalid address') || msg.includes('could not decode')) {
+    throw new Error(
+      `Invalid contract address (${CONTRACT_ADDRESS}). ` +
+      'Verify it on moonbase.moonscan.io and update CONTRACT_ADDRESS in utils/web3.js.'
+    );
+  }
+  // Only flag as network error on explicit fetch/timeout failures
+  if (msg.includes('failed to fetch') || msg.includes('fetch failed') || msg.includes('etimedout') || lastError?.code === 'TIMEOUT') {
+    throw new Error('Could not reach Moonbase Alpha. Check your internet connection and try again.');
+  }
+  throw lastError;
 }
 
 export async function checkVoted(proposalId, voterAddress) {
-  try {
-    const contract = getReadOnlyContract();
-    return await contract.checkVoted(proposalId, voterAddress);
-  } catch (error) {
-    console.error('[web3.js] checkVoted error:', error);
-    return false;
+  for (const rpcUrl of RPC_URLS) {
+    try {
+      const contract = createReadOnlyContract(rpcUrl);
+      return await contract.checkVoted(proposalId, voterAddress);
+    } catch (err) {
+      console.warn('[web3.js] checkVoted RPC failed:', rpcUrl, '—', err.message);
+    }
   }
+  // All failed — default to false so the vote button still works
+  return false;
 }
 
 export async function getProposalCount() {

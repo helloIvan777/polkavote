@@ -10,8 +10,6 @@ import {
   addProposal,
   voteOnProposal,
   checkVoted,
-  getProposalCount,
-  getTotalVotes,
   formatVoteCount,
   CONTRACT_ADDRESS
 } from '../utils/web3';
@@ -88,10 +86,8 @@ function EmptyState({ onAddIdea }) {
  * Main Home Page Component
  */
 export default function HomePage() {
-  // Global Web3 state from context - FIXES "connectWallet is not a function" error
   const { account, isConnected, connectWallet, getSigner } = useWeb3();
-  
-  // Local state
+
   const [proposals, setProposals] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,61 +96,57 @@ export default function HomePage() {
   const [stats, setStats] = useState({ proposalCount: 0, totalVotes: 0 });
   const [error, setError] = useState(null);
 
-  // Load proposals
+  // ── Proposal loader ──────────────────────────────────────────────────────
+  // Runs once on mount using the public JsonRpcProvider (blastapi).
+  // Does NOT depend on `account` so it never re-triggers on wallet changes.
   const loadProposals = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Fetch proposals and stats in parallel
-      const [proposalsData, proposalCount, totalVotes] = await Promise.all([
-        fetchAllProposals(),
-        getProposalCount(),
-        getTotalVotes()
-      ]);
+      const proposalsData = await fetchAllProposals();
 
-      setStats({ proposalCount, totalVotes });
-
-      // Check vote status for each proposal if wallet is connected
-      if (account) {
-        const votedProposals = await Promise.all(
-          proposalsData.map(async (proposal) => {
-            const hasVoted = await checkVoted(proposal.id, account);
-            return { ...proposal, hasVoted };
-          })
-        );
-        setProposals(votedProposals);
-      } else {
-        setProposals(proposalsData);
-      }
+      // Derive stats locally — no extra RPC calls needed
+      const totalVotes = proposalsData.reduce((sum, p) => sum + p.voteCount, 0);
+      setStats({ proposalCount: proposalsData.length, totalVotes });
+      setProposals(proposalsData);
     } catch (err) {
-      console.error('Error loading proposals:', err);
-      setError('Failed to load proposals. Please make sure the contract is deployed.');
+      console.error('[HomePage] loadProposals error:', err);
+      // Only show an error banner for true failures, not an empty contract
+      setError(err.message || 'Failed to load proposals. Check the contract address and network.');
     } finally {
       setIsLoading(false);
     }
-  }, [account]);
+  }, []); // stable — no account dependency
 
-  // Initial load
+  // Fetch proposals immediately on mount
   useEffect(() => {
     loadProposals();
   }, [loadProposals]);
 
-  // Refresh vote status when wallet connects
+  // ── Vote-status updater ──────────────────────────────────────────────────
+  // When the wallet connects/changes, overlay hasVoted status on existing
+  // proposals without triggering a full re-fetch or touching the error state.
   useEffect(() => {
-    if (account && proposals.length > 0) {
-      const updateVoteStatus = async () => {
-        const updatedProposals = await Promise.all(
-          proposals.map(async (proposal) => {
-            const hasVoted = await checkVoted(proposal.id, account);
-            return { ...proposal, hasVoted };
+    if (!account || proposals.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const updated = await Promise.all(
+          proposals.map(async (p) => {
+            const hasVoted = await checkVoted(p.id, account);
+            return { ...p, hasVoted };
           })
         );
-        setProposals(updatedProposals);
-      };
-      updateVoteStatus();
-    }
-  }, [account]);
+        if (!cancelled) setProposals(updated);
+      } catch (err) {
+        console.warn('[HomePage] vote-status update failed (non-fatal):', err.message);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle vote
   const handleVote = async (proposalId) => {
@@ -165,30 +157,39 @@ export default function HomePage() {
 
     try {
       setVotingStates(prev => ({ ...prev, [proposalId]: true }));
-      
+
       const signer = await getSigner();
-      if (!signer) {
-        throw new Error('No signer available');
+      if (!signer) throw new Error('No signer available');
+
+      const result = await voteOnProposal(proposalId, signer);
+
+      if (result.success) {
+        // Optimistic UI update — increment immediately regardless of pending state
+        setProposals(prev => prev.map(p =>
+          p.id === proposalId
+            ? { ...p, voteCount: p.voteCount + 1, hasVoted: true }
+            : p
+        ));
+        setStats(prev => ({ ...prev, totalVotes: prev.totalVotes + 1 }));
+
+        if (result.pending) {
+          // RPC timed out but tx was sent — auto-refresh after block time
+          console.log('[HomePage] Vote pending, scheduling refresh in 5s. TX:', result.txHash);
+          setTimeout(() => {
+            console.log('[HomePage] Auto-refreshing proposals after vote...');
+            loadProposals();
+          }, 5000);
+        }
       }
-      
-      await voteOnProposal(proposalId, signer);
-      
-      // Update local state
-      setProposals(prev => prev.map(p => 
-        p.id === proposalId 
-          ? { ...p, voteCount: p.voteCount + 1, hasVoted: true }
-          : p
-      ));
-      
-      // Refresh stats
-      const totalVotes = await getTotalVotes();
-      setStats(prev => ({ ...prev, totalVotes }));
     } catch (err) {
-      console.error('Vote error:', err);
+      console.error('[HomePage] Vote error:', err);
       if (err.message?.includes('Already voted')) {
-        alert('You have already voted on this proposal');
+        alert('You have already voted on this proposal.');
+      } else if (err.message?.includes('rejected')) {
+        // User rejected in wallet — no alert needed, just log
+        console.log('[HomePage] User rejected vote transaction');
       } else {
-        alert('Failed to submit vote. Please try again.');
+        alert(`Vote failed: ${err.message || 'Unknown error. Please try again.'}`);
       }
     } finally {
       setVotingStates(prev => ({ ...prev, [proposalId]: false }));

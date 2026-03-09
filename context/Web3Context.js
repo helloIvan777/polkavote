@@ -411,9 +411,24 @@ export function Web3Provider({ children }) {
         localStorage.removeItem(WALLET_TYPE_KEY);
       }
     } catch (error) {
-      console.error('[Web3Context] Error checking existing connection:', error);
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(WALLET_TYPE_KEY);
+      console.error('[Web3Context] Error during silent reconnect:', error);
+      // Only clear storage if the wallet is definitively disconnected.
+      // Do NOT clear on network/RPC errors — the next page load should retry.
+      const msg = error?.message?.toLowerCase() ?? '';
+      const isNetworkError =
+        msg.includes('failed to fetch') ||
+        msg.includes('network') ||
+        msg.includes('timeout') ||
+        msg.includes('etimedout') ||
+        error?.code === 'NETWORK_ERROR';
+
+      if (!isNetworkError) {
+        console.log('[Web3Context] Clearing stored session (non-network error).');
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(WALLET_TYPE_KEY);
+      } else {
+        console.log('[Web3Context] Network error during reconnect — keeping storage for next refresh.');
+      }
     }
   }, [getMetaMaskProvider, getPhantomEVMProvider]);
 
@@ -462,14 +477,48 @@ export function Web3Provider({ children }) {
 
   /**
    * EFFECT 1 — Run once on mount: silently restore any prior connection.
-   * Must NOT re-run when account/provider change, only on first mount.
+   * Waits for the wallet extension to finish injecting into window.ethereum
+   * before calling checkExistingConnection, to avoid a race where the
+   * provider is not yet available and the restore silently fails.
    */
   const didCheckConnection = React.useRef(false);
   useEffect(() => {
     if (didCheckConnection.current) return;
     didCheckConnection.current = true;
-    console.log('[Web3Context] Mount: checking for existing connection...');
-    checkExistingConnection();
+
+    const savedWalletType = localStorage.getItem(WALLET_TYPE_KEY);
+    const shouldReconnect = localStorage.getItem(STORAGE_KEY) === 'true';
+
+    // If nothing is saved, skip entirely — don't bother waiting.
+    if (!shouldReconnect || !savedWalletType) {
+      console.log('[Web3Context] No saved session, skipping auto-connect.');
+      return;
+    }
+
+    console.log('[Web3Context] Saved session found, waiting for wallet extension...');
+
+    const runCheck = () => {
+      console.log('[Web3Context] Extension ready — running checkExistingConnection');
+      checkExistingConnection();
+    };
+
+    if (typeof window === 'undefined') return;
+
+    // MetaMask fires 'ethereum#initialized' when its provider is fully ready.
+    // Phantom doesn't fire this event, so we also set a max-wait fallback.
+    const timeout = setTimeout(runCheck, 500); // fallback: run after 500 ms
+
+    const onEthereumInit = () => {
+      clearTimeout(timeout);
+      runCheck();
+    };
+
+    window.addEventListener('ethereum#initialized', onEthereumInit, { once: true });
+
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('ethereum#initialized', onEthereumInit);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
