@@ -3,8 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useWeb3 } from '../context/Web3Context';
-import { ConnectWalletButton, MobileConnectButton, PolkaVoteLogo } from '../components/Header';
+import { PolkaVoteLogo, ConnectWalletButton } from '../components/Header';
 
 /**
  * Navigation Icons
@@ -94,15 +93,15 @@ function DesktopSidebar({ pathname }) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
-          
+
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`
                 flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
-                ${isActive 
-                  ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/30' 
+                ${isActive
+                  ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/30'
                   : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
                 }
               `}
@@ -113,11 +112,6 @@ function DesktopSidebar({ pathname }) {
           );
         })}
       </nav>
-
-      {/* Connect Wallet */}
-      <div className="p-4 border-t border-slate-700/50">
-        <ConnectWalletButton />
-      </div>
 
       {/* Nano Banana Badge */}
       <NanoBananaBadge />
@@ -135,15 +129,15 @@ function MobileBottomNav({ pathname }) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
-          
+
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`
                 flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200
-                ${isActive 
-                  ? 'text-pink-500' 
+                ${isActive
+                  ? 'text-pink-500'
                   : 'text-slate-400'
                 }
               `}
@@ -161,6 +155,23 @@ function MobileBottomNav({ pathname }) {
 }
 
 /**
+ * Desktop Top Header Component
+ */
+function DesktopTopBar() {
+  return (
+    <header className="hidden lg:flex items-center justify-between bg-slate-800 border-b border-slate-700/50 px-6 py-3">
+      <div className="flex items-center gap-2">
+        <PolkaVoteLogo className="w-8 h-8" />
+        <span className="text-lg font-bold text-white">PolkaVote</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <ConnectWalletButton />
+      </div>
+    </header>
+  );
+}
+
+/**
  * Main Layout Component
  */
 export default function Layout({ children }) {
@@ -170,9 +181,12 @@ export default function Layout({ children }) {
     <div className="min-h-screen bg-slate-900 flex">
       {/* Desktop Sidebar */}
       <DesktopSidebar pathname={pathname} />
-      
+
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-h-screen">
+        {/* Desktop Top Bar */}
+        <DesktopTopBar />
+
         {/* Mobile Header */}
         <header className="lg:hidden bg-slate-800 border-b border-slate-700/50 px-4 py-3">
           <div className="flex items-center justify-between">
@@ -180,15 +194,14 @@ export default function Layout({ children }) {
               <PolkaVoteLogo className="w-8 h-8" />
               <span className="text-lg font-bold text-white">PolkaVote</span>
             </Link>
-            <MobileConnectButton />
           </div>
         </header>
-        
+
         {/* Page Content */}
         <div className="flex-1">
           {children}
         </div>
-        
+
         {/* Bottom padding for mobile nav */}
         <div className="lg:hidden h-20" />
       </main>

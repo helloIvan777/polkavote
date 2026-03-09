@@ -3,17 +3,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
 
-// Storage key for localStorage
 const STORAGE_KEY = 'polkavote_connected';
+const WALLET_TYPE_KEY = 'polkavote_wallet_type';
 
-/**
- * Web3 Context
- */
+// Moonbase Alpha Chain ID
+const MOONBASE_ALPHA_CHAIN_ID = 1287;
+const MOONBASE_ALPHA_HEX = '0x507';
+
 const Web3Context = createContext(null);
 
-/**
- * Web3 Provider Component - Wraps the entire app
- */
 export function Web3Provider({ children }) {
   const [account, setAccount] = useState(null);
   const [chainId, setChainId] = useState(null);
@@ -22,59 +20,276 @@ export function Web3Provider({ children }) {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [walletType, setWalletType] = useState(null); // 'metamask' or 'phantom'
 
   /**
-   * Check if MetaMask is installed
+   * Get all available EVM providers
+   * Modern wallets inject themselves into window.ethereum.providers array
    */
-  const isMetaMaskInstalled = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      return typeof window.ethereum !== 'undefined';
+  const getProviders = useCallback(() => {
+    if (typeof window === 'undefined') return [];
+    
+    const providers = [];
+    
+    // Check for providers array (injected by multiple wallet extensions)
+    if (window.ethereum?.providers && Array.isArray(window.ethereum.providers)) {
+      providers.push(...window.ethereum.providers);
     }
-    return false;
+    
+    // Also check for window.phantom.ethereum (Phantom's EVM provider)
+    if (window.phantom?.ethereum) {
+      providers.push(window.phantom.ethereum);
+    }
+    
+    // Check for window.ethereum itself (might be the only provider)
+    if (window.ethereum && !providers.includes(window.ethereum)) {
+      providers.push(window.ethereum);
+    }
+    
+    return providers;
   }, []);
 
   /**
-   * Connect to MetaMask wallet
+   * Find MetaMask provider specifically
+   * Filter: isMetaMask === true AND isPhantom === undefined
    */
-  const connectWallet = useCallback(async () => {
-    console.log('[Web3Context] connectWallet called');
+  const getMetaMaskProvider = useCallback(() => {
+    const providers = getProviders();
+    console.log('[Web3Context] Available providers:', providers.map(p => ({
+      isMetaMask: p?.isMetaMask,
+      isPhantom: p?.isPhantom,
+      isCoinbaseWallet: p?.isCoinbaseWallet,
+    })));
+
+    // First, try to find provider with isMetaMask === true and isPhantom === undefined
+    const metaMaskProvider = providers.find(p => 
+      p?.isMetaMask === true && p?.isPhantom === undefined
+    );
+
+    if (metaMaskProvider) {
+      console.log('[Web3Context] Found MetaMask provider');
+      return metaMaskProvider;
+    }
+
+    // Fallback: if window.ethereum exists and no other provider found, use it
+    if (window.ethereum && providers.length === 1) {
+      console.log('[Web3Context] Using window.ethereum as MetaMask');
+      return window.ethereum;
+    }
+
+    return null;
+  }, [getProviders]);
+
+  /**
+   * Find Phantom EVM provider specifically
+   * Filter: isPhantom === true OR use window.phantom.ethereum
+   */
+  const getPhantomEVMProvider = useCallback(() => {
+    // First check for window.phantom.ethereum (Phantom's dedicated EVM provider)
+    if (window.phantom?.ethereum) {
+      console.log('[Web3Context] Found Phantom EVM provider via window.phantom.ethereum');
+      return window.phantom.ethereum;
+    }
+
+    const providers = getProviders();
+
+    // Find provider with isPhantom === true
+    const phantomProvider = providers.find(p => p?.isPhantom === true);
+
+    if (phantomProvider) {
+      console.log('[Web3Context] Found Phantom EVM provider in providers array');
+      return phantomProvider;
+    }
+
+    return null;
+  }, [getProviders]);
+
+  const isMetaMaskInstalled = useCallback(() => {
+    return getMetaMaskProvider() !== null;
+  }, [getMetaMaskProvider]);
+
+  const isPhantomEVMInstalled = useCallback(() => {
+    return getPhantomEVMProvider() !== null;
+  }, [getPhantomEVMProvider]);
+
+  /**
+   * Switch network to Moonbase Alpha
+   */
+  const switchToMoonbaseAlpha = useCallback(async (ethereumProvider) => {
+    console.log('[Web3Context] Attempting to switch to Moonbase Alpha...');
     
-    if (!isMetaMaskInstalled()) {
-      const error = new Error('MetaMask is not installed. Please install MetaMask to use this feature.');
-      console.error('[Web3Context] MetaMask not installed');
-      throw error;
+    try {
+      await ethereumProvider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: MOONBASE_ALPHA_HEX }],
+      });
+      console.log('[Web3Context] Successfully switched to Moonbase Alpha');
+      return true;
+    } catch (switchError) {
+      console.error('[Web3Context] Switch chain error:', switchError);
+      
+      // If the chain hasn't been added to the wallet, try to add it
+      if (switchError.code === 4902) {
+        console.log('[Web3Context] Moonbase Alpha not added, attempting to add...');
+        try {
+          await ethereumProvider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: MOONBASE_ALPHA_HEX,
+              chainName: 'Moonbase Alpha',
+              nativeCurrency: {
+                name: 'DEV',
+                symbol: 'DEV',
+                decimals: 18,
+              },
+              rpcUrls: ['https://rpc.api.moonbase.moonbeam.network'],
+              blockExplorerUrls: ['https://moonbase.moonscan.io/'],
+            }],
+          });
+          console.log('[Web3Context] Moonbase Alpha added successfully');
+          return true;
+        } catch (addError) {
+          console.error('[Web3Context] Add chain error:', addError);
+          throw new Error('Failed to add Moonbase Alpha network');
+        }
+      }
+      
+      // User rejected the switch
+      if (switchError.code === 4001) {
+        throw new Error('Network switch rejected by user');
+      }
+      
+      throw new Error('Failed to switch to Moonbase Alpha network');
+    }
+  }, []);
+
+  /**
+   * Connect to MetaMask specifically
+   */
+  const connectMetaMask = useCallback(async () => {
+    console.log('[Web3Context] Connecting to MetaMask...');
+
+    const metaMaskProvider = getMetaMaskProvider();
+    
+    if (!metaMaskProvider) {
+      throw new Error('MetaMask is not installed. Please install MetaMask to use this feature.');
+    }
+
+    // Request account access from MetaMask specifically
+    const accounts = await metaMaskProvider.request({ method: 'eth_requestAccounts' });
+
+    if (accounts.length === 0) {
+      throw new Error('No accounts found. Please unlock your MetaMask wallet.');
+    }
+
+    const address = accounts[0];
+    const browserProvider = new ethers.BrowserProvider(metaMaskProvider);
+    const signerInstance = await browserProvider.getSigner();
+    const network = await browserProvider.getNetwork();
+
+    console.log('[Web3Context] Connected to MetaMask:', address, 'Chain:', Number(network.chainId));
+
+    // Check and switch to Moonbase Alpha if needed
+    if (Number(network.chainId) !== MOONBASE_ALPHA_CHAIN_ID) {
+      console.log('[Web3Context] Not on Moonbase Alpha, switching...');
+      await switchToMoonbaseAlpha(metaMaskProvider);
+      
+      // Re-fetch network after switch
+      const updatedNetwork = await browserProvider.getNetwork();
+      setChainId(Number(updatedNetwork.chainId));
+    } else {
+      setChainId(Number(network.chainId));
+    }
+
+    setAccount(address);
+    setProvider(browserProvider);
+    setSigner(signerInstance);
+    setIsConnected(true);
+    setWalletType('metamask');
+
+    localStorage.setItem(STORAGE_KEY, 'true');
+    localStorage.setItem(WALLET_TYPE_KEY, 'metamask');
+
+    return { address, chainId: Number(network.chainId), walletType: 'metamask' };
+  }, [getMetaMaskProvider, switchToMoonbaseAlpha]);
+
+  /**
+   * Connect to Phantom EVM specifically (NOT Solana)
+   */
+  const connectPhantomEVM = useCallback(async () => {
+    console.log('[Web3Context] Connecting to Phantom EVM...');
+
+    const phantomProvider = getPhantomEVMProvider();
+
+    if (!phantomProvider) {
+      throw new Error('Phantom wallet is not installed or EVM support is not enabled. Please install Phantom and enable EVM support.');
     }
 
     try {
-      setIsConnecting(true);
-      console.log('[Web3Context] Requesting account access...');
+      // Request account access from Phantom EVM
+      const accounts = await phantomProvider.request({ method: 'eth_requestAccounts' });
 
-      // Request account access
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      console.log('[Web3Context] Accounts received:', accounts);
-      
       if (accounts.length === 0) {
-        throw new Error('No accounts found. Please unlock your MetaMask wallet.');
+        throw new Error('No accounts found. Please unlock your Phantom wallet.');
       }
 
       const address = accounts[0];
-      const browserProvider = new ethers.BrowserProvider(window.ethereum);
+      const browserProvider = new ethers.BrowserProvider(phantomProvider);
       const signerInstance = await browserProvider.getSigner();
       const network = await browserProvider.getNetwork();
 
-      console.log('[Web3Context] Connected to:', address, 'Chain:', Number(network.chainId));
+      console.log('[Web3Context] Connected to Phantom EVM:', address, 'Chain:', Number(network.chainId));
+
+      // Check and switch to Moonbase Alpha if needed
+      if (Number(network.chainId) !== MOONBASE_ALPHA_CHAIN_ID) {
+        console.log('[Web3Context] Not on Moonbase Alpha, switching...');
+        await switchToMoonbaseAlpha(phantomProvider);
+        
+        // Re-fetch network after switch
+        const updatedNetwork = await browserProvider.getNetwork();
+        setChainId(Number(updatedNetwork.chainId));
+      } else {
+        setChainId(Number(network.chainId));
+      }
 
       setAccount(address);
-      setChainId(Number(network.chainId));
       setProvider(browserProvider);
       setSigner(signerInstance);
       setIsConnected(true);
+      setWalletType('phantom');
 
-      // Save to localStorage
       localStorage.setItem(STORAGE_KEY, 'true');
-      console.log('[Web3Context] Connection saved to localStorage');
+      localStorage.setItem(WALLET_TYPE_KEY, 'phantom');
 
-      return { address, chainId: Number(network.chainId) };
+      return { address, chainId: Number(network.chainId), walletType: 'phantom' };
+    } catch (error) {
+      console.error('[Web3Context] Phantom EVM connection error:', error);
+      throw error;
+    }
+  }, [getPhantomEVMProvider, switchToMoonbaseAlpha]);
+
+  /**
+   * Main connect wallet function
+   * @param {string} type - 'metamask' or 'phantom'
+   */
+  const connectWallet = useCallback(async (type) => {
+    console.log('[Web3Context] connectWallet called with type:', type);
+    setIsConnecting(true);
+
+    try {
+      if (type === 'metamask') {
+        await connectMetaMask();
+      } else if (type === 'phantom') {
+        await connectPhantomEVM();
+      } else {
+        // Show wallet selection modal
+        setShowWalletModal(true);
+        return null;
+      }
+
+      setShowWalletModal(false);
+      return { account, walletType };
     } catch (error) {
       console.error('[Web3Context] Connection error:', error);
       if (error.code === 4001) {
@@ -84,185 +299,222 @@ export function Web3Provider({ children }) {
     } finally {
       setIsConnecting(false);
     }
-  }, [isMetaMaskInstalled]);
+  }, [connectMetaMask, connectPhantomEVM, account, walletType]);
 
-  /**
-   * Disconnect wallet
-   */
   const disconnectWallet = useCallback(() => {
     console.log('[Web3Context] Disconnecting wallet...');
+
     setAccount(null);
     setChainId(null);
     setProvider(null);
     setSigner(null);
     setIsConnected(false);
     setShowAccountMenu(false);
+    setShowWalletModal(false);
+    setWalletType(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(WALLET_TYPE_KEY);
     console.log('[Web3Context] Wallet disconnected');
   }, []);
 
-  /**
-   * Switch account (triggers MetaMask account switch)
-   */
   const switchAccount = useCallback(async () => {
     console.log('[Web3Context] Switch account requested');
     try {
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (walletType === 'metamask') {
+        const metaMaskProvider = getMetaMaskProvider();
+        if (metaMaskProvider) {
+          await metaMaskProvider.request({ method: 'eth_requestAccounts' });
+        }
+      } else if (walletType === 'phantom') {
+        const phantomProvider = getPhantomEVMProvider();
+        if (phantomProvider) {
+          await phantomProvider.request({ method: 'eth_requestAccounts' });
+        }
+      }
     } catch (error) {
       console.error('[Web3Context] Switch account error:', error);
       throw error;
     }
-  }, []);
+  }, [walletType, getMetaMaskProvider, getPhantomEVMProvider]);
 
   /**
-   * Eager connection check on mount
+   * Check for existing connection on mount
    */
   const checkExistingConnection = useCallback(async () => {
     console.log('[Web3Context] Checking existing connection...');
-    
-    if (!isMetaMaskInstalled()) {
-      console.log('[Web3Context] MetaMask not installed');
-      return;
-    }
 
-    // Check if user was previously connected
+    const savedWalletType = localStorage.getItem(WALLET_TYPE_KEY);
     const shouldConnect = localStorage.getItem(STORAGE_KEY) === 'true';
-    console.log('[Web3Context] localStorage shouldConnect:', shouldConnect);
-    
-    if (!shouldConnect) {
+
+    console.log('[Web3Context] localStorage shouldConnect:', shouldConnect, 'walletType:', savedWalletType);
+
+    if (!shouldConnect || !savedWalletType) {
       console.log('[Web3Context] No previous connection found');
       return;
     }
 
     try {
-      // Try to get accounts without prompting
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-      console.log('[Web3Context] eth_accounts returned:', accounts);
-      
-      if (accounts && accounts.length > 0) {
-        const address = accounts[0];
-        const browserProvider = new ethers.BrowserProvider(window.ethereum);
-        const signerInstance = await browserProvider.getSigner();
-        const network = await browserProvider.getNetwork();
+      if (savedWalletType === 'metamask') {
+        const metaMaskProvider = getMetaMaskProvider();
+        if (metaMaskProvider) {
+          const accounts = await metaMaskProvider.request({ method: 'eth_accounts' });
+          console.log('[Web3Context] eth_accounts returned:', accounts);
 
-        console.log('[Web3Context] Restored connection:', address);
+          if (accounts && accounts.length > 0) {
+            const address = accounts[0];
+            const browserProvider = new ethers.BrowserProvider(metaMaskProvider);
+            const signerInstance = await browserProvider.getSigner();
+            const network = await browserProvider.getNetwork();
 
-        setAccount(address);
-        setChainId(Number(network.chainId));
-        setProvider(browserProvider);
-        setSigner(signerInstance);
-        setIsConnected(true);
+            console.log('[Web3Context] Restored MetaMask connection:', address);
+
+            setAccount(address);
+            setChainId(Number(network.chainId));
+            setProvider(browserProvider);
+            setSigner(signerInstance);
+            setIsConnected(true);
+            setWalletType('metamask');
+          }
+        }
+      } else if (savedWalletType === 'phantom') {
+        const phantomProvider = getPhantomEVMProvider();
+        if (phantomProvider) {
+          const accounts = await phantomProvider.request({ method: 'eth_accounts' });
+          console.log('[Web3Context] Phantom eth_accounts returned:', accounts);
+
+          if (accounts && accounts.length > 0) {
+            const address = accounts[0];
+            const browserProvider = new ethers.BrowserProvider(phantomProvider);
+            const signerInstance = await browserProvider.getSigner();
+            const network = await browserProvider.getNetwork();
+
+            console.log('[Web3Context] Restored Phantom EVM connection:', address);
+
+            setAccount(address);
+            setChainId(Number(network.chainId));
+            setProvider(browserProvider);
+            setSigner(signerInstance);
+            setIsConnected(true);
+            setWalletType('phantom');
+          }
+        }
       } else {
-        console.log('[Web3Context] No accounts available, clearing storage');
+        console.log('[Web3Context] Unknown wallet type, clearing storage');
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(WALLET_TYPE_KEY);
       }
     } catch (error) {
       console.error('[Web3Context] Error checking existing connection:', error);
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(WALLET_TYPE_KEY);
     }
-  }, [isMetaMaskInstalled]);
+  }, [getMetaMaskProvider, getPhantomEVMProvider]);
 
   /**
-   * Handle account changes from MetaMask
+   * Handle account changes
    */
   const handleAccountsChanged = useCallback((accounts) => {
     console.log('[Web3Context] accountsChanged event:', accounts);
-    
+
     if (accounts.length === 0) {
-      // User disconnected from MetaMask
-      console.log('[Web3Context] User disconnected from MetaMask');
+      console.log('[Web3Context] User disconnected from wallet');
       disconnectWallet();
     } else if (accounts[0] !== account) {
-      // User switched account
       const newAddress = accounts[0];
       console.log('[Web3Context] Account switched to:', newAddress);
       setAccount(newAddress);
-      
-      // Update signer
-      if (provider) {
+
+      if (walletType === 'metamask' && provider) {
         provider.getSigner().then(newSigner => {
           setSigner(newSigner);
           console.log('[Web3Context] Signer updated');
         });
       }
     }
-  }, [account, provider, disconnectWallet]);
+  }, [account, provider, walletType, disconnectWallet]);
 
   /**
-   * Handle chain changes from MetaMask
+   * Handle chain changes
    */
   const handleChainChanged = useCallback((newChainId) => {
     console.log('[Web3Context] chainChanged event:', newChainId);
     setChainId(parseInt(newChainId, 16));
-    // Reload page on chain change to ensure clean state
     window.location.reload();
   }, []);
 
   /**
-   * Setup MetaMask event listeners on mount
+   * Setup event listeners on mount
    */
   useEffect(() => {
     console.log('[Web3Context] Provider mounted, setting up listeners');
-    
-    if (!isMetaMaskInstalled()) {
-      return;
-    }
 
-    // Check for existing connection
     checkExistingConnection();
 
-    // Add event listeners
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
-      console.log('[Web3Context] Event listeners attached');
+    if (typeof window !== 'undefined') {
+      // MetaMask events
+      if (window.ethereum) {
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+        console.log('[Web3Context] Ethereum event listeners attached');
+      }
+
+      // Phantom EVM events
+      if (window.phantom?.ethereum) {
+        window.phantom.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.phantom.ethereum.on('chainChanged', handleChainChanged);
+        console.log('[Web3Context] Phantom EVM event listeners attached');
+      }
     }
 
-    // Cleanup listeners on unmount
     return () => {
       if (window.ethereum) {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
         window.ethereum.removeListener('chainChanged', handleChainChanged);
-        console.log('[Web3Context] Event listeners removed');
       }
+      if (window.phantom?.ethereum) {
+        window.phantom.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.phantom.ethereum.removeListener('chainChanged', handleChainChanged);
+      }
+      console.log('[Web3Context] Event listeners removed');
     };
-  }, [isMetaMaskInstalled, checkExistingConnection, handleAccountsChanged, handleChainChanged]);
+  }, [checkExistingConnection, handleAccountsChanged, handleChainChanged]);
 
   /**
-   * Get signer (ensures we have a valid signer)
+   * Get signer for contract interactions
    */
   const getSigner = useCallback(async () => {
     console.log('[Web3Context] getSigner called, has signer:', !!signer);
-    
+
     if (signer) {
       return signer;
     }
-    
+
     if (provider) {
       const newSigner = await provider.getSigner();
       setSigner(newSigner);
       return newSigner;
     }
-    
+
     console.warn('[Web3Context] No signer or provider available');
     return null;
   }, [signer, provider]);
 
-  /**
-   * Toggle account menu
-   */
   const toggleAccountMenu = useCallback(() => {
     setShowAccountMenu(prev => !prev);
   }, []);
 
-  /**
-   * Close account menu
-   */
   const closeAccountMenu = useCallback(() => {
     setShowAccountMenu(false);
   }, []);
 
-  // Memoize context value to prevent unnecessary re-renders
+  const openWalletModal = useCallback(() => {
+    setShowWalletModal(true);
+  }, []);
+
+  const closeWalletModal = useCallback(() => {
+    setShowWalletModal(false);
+  }, []);
+
   const value = useMemo(() => ({
     account,
     chainId,
@@ -271,13 +523,18 @@ export function Web3Provider({ children }) {
     provider,
     signer,
     showAccountMenu,
+    showWalletModal,
+    walletType,
     connectWallet,
     disconnectWallet,
     switchAccount,
     getSigner,
     isMetaMaskInstalled,
+    isPhantomEVMInstalled,
     toggleAccountMenu,
     closeAccountMenu,
+    openWalletModal,
+    closeWalletModal,
   }), [
     account,
     chainId,
@@ -286,13 +543,18 @@ export function Web3Provider({ children }) {
     provider,
     signer,
     showAccountMenu,
+    showWalletModal,
+    walletType,
     connectWallet,
     disconnectWallet,
     switchAccount,
     getSigner,
     isMetaMaskInstalled,
+    isPhantomEVMInstalled,
     toggleAccountMenu,
     closeAccountMenu,
+    openWalletModal,
+    closeWalletModal,
   ]);
 
   return (
@@ -302,30 +564,21 @@ export function Web3Provider({ children }) {
   );
 }
 
-/**
- * Custom hook to use Web3 context
- */
 export function useWeb3() {
   const context = useContext(Web3Context);
-  
+
   if (!context) {
     throw new Error('useWeb3 must be used within a Web3Provider');
   }
-  
+
   return context;
 }
 
-/**
- * Truncate an Ethereum address for display
- */
 export function truncateAddress(address, start = 6, end = 4) {
   if (!address) return '';
   return `${address.slice(0, start)}...${address.slice(-end)}`;
 }
 
-/**
- * Format chain ID to readable name
- */
 export function formatChainId(chainId) {
   const chains = {
     1: 'Ethereum Mainnet',
@@ -334,6 +587,8 @@ export function formatChainId(chainId) {
     137: 'Polygon',
     80001: 'Mumbai Testnet',
     80002: 'Polygon Amoy',
+    1287: 'Moonbase Alpha',
+    1284: 'Moonbeam',
     42161: 'Arbitrum One',
     10: 'Optimism',
   };

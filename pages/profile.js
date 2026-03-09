@@ -1,20 +1,11 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { useWeb3 } from '../context/Web3Context';
 import { fetchAllProposals, checkVoted, truncateAddress } from '../utils/web3';
 
-/**
- * Profile Page
- * Shows user's profile information and activity
- * 
- * FIX: Uses useWeb3() hook from context instead of importing from utils/web3.js
- */
 export default function ProfilePage() {
-  // FIX: Use useWeb3 hook from context - this fixes "connectWallet is not a function" error
   const { account, isConnected, connectWallet, isConnecting } = useWeb3();
-  
+
   const [userStats, setUserStats] = useState({
     proposalsCreated: 0,
     votesCast: 0,
@@ -26,13 +17,11 @@ export default function ProfilePage() {
     try {
       setIsLoading(true);
       const allProposals = await fetchAllProposals();
-      
-      // Find proposals created by user
-      const userProposals = allProposals.filter(p => 
+
+      const userProposals = allProposals.filter(p =>
         p.proposer.toLowerCase() === address.toLowerCase()
       );
 
-      // Count votes cast
       let votesCast = 0;
       for (const proposal of allProposals) {
         const hasVoted = await checkVoted(proposal.id, address);
@@ -57,7 +46,6 @@ export default function ProfilePage() {
     }
   }, [account]);
 
-  // Generate avatar color from address
   const getAvatarColor = (address) => {
     if (!address) return 'from-slate-600 to-slate-700';
     const colors = [
@@ -78,7 +66,6 @@ export default function ProfilePage() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-pink-500 mb-2">Profile</h1>
           <p className="text-slate-400">
@@ -87,7 +74,6 @@ export default function ProfilePage() {
         </div>
 
         {!isConnected ? (
-          /* Connect Wallet State */
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
             <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -110,7 +96,6 @@ export default function ProfilePage() {
             </button>
           </div>
         ) : isLoading ? (
-          /* Loading State */
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 animate-pulse">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-20 h-20 bg-slate-700 rounded-full" />
@@ -126,9 +111,7 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          /* Profile Content */}
           <>
-            {/* Profile Card */}
             <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700/50 mb-6">
               <div className="flex items-center gap-4">
                 <div className={`w-20 h-20 bg-gradient-to-br ${getAvatarColor(account)} rounded-full flex items-center justify-center`}>
@@ -150,7 +133,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-slate-800 rounded-xl p-4 border border-slate-700/50 text-center">
                 <div className="text-3xl font-bold text-pink-500 mb-1">
@@ -172,7 +154,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Quick Actions */}
             <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700/50">
               <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-3">

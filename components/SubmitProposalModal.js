@@ -1,50 +1,91 @@
-'use client';
-
 import React, { useState } from 'react';
+import { useWeb3 } from '../context/Web3Context';
+import { addProposal } from '../utils/web3';
 
-/**
- * Submit Proposal Modal
- * Form for creating new proposals
- */
-export default function SubmitProposalModal({ isOpen, onClose, onSubmit, isSubmitting }) {
+export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
+  const { signer, isConnected } = useWeb3();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Validate form
   const validate = () => {
     const newErrors = {};
-    
-    if (!title.trim()) {
+
+    if (!title || !title.trim()) {
       newErrors.title = 'Title is required';
     } else if (title.length > 200) {
       newErrors.title = 'Title must be 200 characters or less';
     }
-    
-    if (!description.trim()) {
+
+    if (!description || !description.trim()) {
       newErrors.description = 'Description is required';
     } else if (description.length > 1000) {
       newErrors.description = 'Description must be 1000 characters or less';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (validate()) {
-      onSubmit({ title: title.trim(), description: description.trim() });
+
+    if (!validate()) {
+      return;
+    }
+
+    if (!isConnected) {
+      setErrors({ form: 'Please connect your wallet first' });
+      return;
+    }
+
+    if (!signer) {
+      setErrors({ form: 'Wallet signer not available. Please reconnect.' });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrors({});
+
+      console.log('[SubmitProposalModal] Submitting proposal...');
+      console.log('[SubmitProposalModal] Title:', title);
+      console.log('[SubmitProposalModal] Description:', description);
+      console.log('[SubmitProposalModal] Has signer:', !!signer);
+
+      const result = await addProposal(title, description, signer);
+
+      console.log('[SubmitProposalModal] Proposal submitted successfully:', result);
+
+      setTitle('');
+      setDescription('');
+
+      if (onSuccess) {
+        onSuccess(result);
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('[SubmitProposalModal] Submission failed:', error);
+
+      let errorMessage = 'Failed to submit proposal. Please try again.';
+
+      if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setErrors({ form: errorMessage });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Reset form when modal closes
   const handleClose = () => {
     setTitle('');
     setDescription('');
     setErrors({});
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -52,15 +93,12 @@ export default function SubmitProposalModal({ isOpen, onClose, onSubmit, isSubmi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={handleClose}
       />
-      
-      {/* Modal Content */}
+
       <div className="relative bg-slate-800 rounded-2xl w-full max-w-lg shadow-2xl border border-slate-700/50 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
           <h2 className="text-xl font-bold text-white">Submit Your Idea</h2>
           <button
@@ -73,9 +111,13 @@ export default function SubmitProposalModal({ isOpen, onClose, onSubmit, isSubmi
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Title Field */}
+          {errors.form && (
+            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <p className="text-red-400 text-sm">{errors.form}</p>
+            </div>
+          )}
+
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-2">
               Title
@@ -102,7 +144,6 @@ export default function SubmitProposalModal({ isOpen, onClose, onSubmit, isSubmi
             </p>
           </div>
 
-          {/* Description Field */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-slate-300 mb-2">
               Description
@@ -129,26 +170,27 @@ export default function SubmitProposalModal({ isOpen, onClose, onSubmit, isSubmi
             </p>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={handleClose}
+              disabled={isSubmitting}
               className="flex-1 px-4 py-3 bg-slate-700 text-white rounded-xl font-medium
-                hover:bg-slate-600 transition-colors duration-200"
+                hover:bg-slate-600 transition-colors duration-200
+                disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isConnected}
               className={`
                 flex-1 px-4 py-3 rounded-xl font-medium
                 bg-gradient-to-r from-pink-500 to-pink-600 text-white
                 hover:from-pink-600 hover:to-pink-700
                 transition-all duration-200
                 disabled:opacity-50 disabled:cursor-not-allowed
-                ${!isSubmitting ? 'hover:shadow-lg hover:shadow-pink-500/30' : ''}
+                ${!isSubmitting && isConnected ? 'hover:shadow-lg hover:shadow-pink-500/30' : ''}
               `}
             >
               {isSubmitting ? (
