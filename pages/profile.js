@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Layout from '../components/Layout';
 import ConnectState, { ProfileIcon } from '../components/ConnectState';
+import ProposalCard from '../components/ProposalCard';
+import ProposalDetailModal from '../components/ProposalDetailModal';
 import { useWeb3 } from '../context/Web3Context';
 import { fetchAllProjects, getContribution, truncateAddress } from '../utils/web3';
 
@@ -13,14 +15,18 @@ export default function ProfilePage() {
     projectsBacked: 0,
     proposalIds: []
   });
+  const [myProposals, setMyProposals] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const projectsPerPage = 6;
 
   const loadUserStats = async (address) => {
     try {
       setIsLoading(true);
       const allProjects = await fetchAllProjects();
 
-      // Count projects created by user
+      // Filter projects created by user
       const userProposals = allProjects.filter(p =>
         p.creator.toLowerCase() === address.toLowerCase()
       );
@@ -37,11 +43,25 @@ export default function ProfilePage() {
         projectsBacked,
         proposalIds: userProposals.map(p => p.id)
       });
+
+      // Set my proposals for display
+      setMyProposals(userProposals);
     } catch (err) {
       console.error('Error loading user stats:', err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Pagination logic
+  const indexOfLastProject = currentPage * projectsPerPage;
+  const indexOfFirstProject = indexOfLastProject - projectsPerPage;
+  const currentMyProposals = myProposals.slice(indexOfFirstProject, indexOfLastProject);
+  const totalPages = Math.ceil(myProposals.length / projectsPerPage);
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -171,6 +191,100 @@ export default function ProfilePage() {
                 </Link>
               </div>
             </div>
+
+            {/* My Proposals Section */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold text-[#e6007a] mb-6">My Proposals</h2>
+
+              {myProposals.length === 0 ? (
+                <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
+                  <div className="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-10 h-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-white mb-2">No Proposals Yet</h3>
+                  <p className="text-slate-400 text-sm mb-6">
+                    You haven't created any proposals yet. Start by sharing your first idea with the community!
+                  </p>
+                  <Link
+                    href="/submit"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-semibold text-sm
+                      hover:from-pink-600 hover:to-pink-700 transition-all hover:shadow-lg hover:shadow-pink-500/30"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Submit Your First Idea
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {currentMyProposals.map((proposal) => (
+                      <ProposalCard
+                        key={proposal.id}
+                        proposal={proposal}
+                        onCardClick={setSelectedProject}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-8">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
+                          bg-slate-800/60 border border-slate-700/60 text-slate-300
+                          hover:border-pink-500/50 hover:text-white
+                          disabled:opacity-30 disabled:cursor-not-allowed backdrop-blur-sm"
+                      >
+                        ← Prev
+                      </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-2">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                          <button
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`
+                              w-8 h-8 rounded-xl text-sm font-semibold transition-all duration-200
+                              ${currentPage === page
+                                ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-lg shadow-pink-500/30'
+                                : 'bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:border-pink-500/50 hover:text-white'
+                              }
+                            `}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={indexOfLastProject >= myProposals.length}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
+                          bg-slate-800/60 border border-slate-700/60 text-slate-300
+                          hover:border-pink-500/50 hover:text-white
+                          disabled:opacity-30 disabled:cursor-not-allowed backdrop-blur-sm"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Proposal Detail Modal */}
+            <ProposalDetailModal
+              isOpen={!!selectedProject}
+              project={selectedProject}
+              onClose={() => setSelectedProject(null)}
+            />
           </>
         )}
       </div>
