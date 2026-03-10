@@ -108,7 +108,7 @@ function Toast({ message, type = 'info', onDismiss }) {
 export default function ProposalDetailModal({
   proposal, onClose, onContribute, onWithdraw, onRefund, isActing,
 }) {
-  const { account, isConnected, getSigner } = useWeb3();
+  const { account, isConnected, getSigner, openWalletModal } = useWeb3();
 
   const [contributionAmount, setContributionAmount] = useState('');
   const [userContribution, setUserContribution]     = useState(0);   // DEV, float
@@ -379,42 +379,83 @@ export default function ProposalDetailModal({
 
           {/* ── Contribution Section (only if campaign is active) ── */}
           {showContributeBtn && !isSuccess && (
-            <div className="rounded-xl border border-white/10 p-4 space-y-3"
+            <div className="rounded-xl border border-white/10 p-5 space-y-4"
               style={{ background: 'rgba(255,255,255,0.03)' }}>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Back this project
-              </p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="0.001"
-                    placeholder="0.00"
-                    value={contributionAmount}
-                    onChange={(e) => setContributionAmount(e.target.value)}
-                    className="w-full pl-4 pr-14 py-2.5 bg-slate-900 border border-slate-700
-                      rounded-xl text-white placeholder-slate-600
-                      focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500
-                      transition-all duration-200 text-sm"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                    DEV
-                  </span>
-                </div>
-                <div className="flex gap-1">
-                  {['0.01', '0.1', '1'].map((preset) => (
-                    <button
-                      key={preset}
-                      onClick={() => setContributionAmount(preset)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300
-                        hover:bg-slate-600 text-xs font-medium transition-colors"
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold uppercase tracking-widest text-white">
+                  Back this project
+                </p>
+                {isConnected && (
+                  <span className="text-xs text-slate-400">Min: 0.001 DEV</span>
+                )}
               </div>
+
+              {!isConnected ? (
+                /* NOT CONNECTED - Show connect button */
+                <div className="text-center py-4">
+                  <button
+                    onClick={openWalletModal}
+                    className="w-full py-4 px-6 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-bold text-base
+                      hover:from-pink-600 hover:to-pink-700 transition-all duration-200
+                      hover:shadow-lg hover:shadow-pink-500/30"
+                  >
+                    🔗 Connect Wallet to Support
+                  </button>
+                  <p className="text-xs text-slate-400 mt-3">
+                    You need an active wallet to back this project
+                  </p>
+                </div>
+              ) : (
+                /* CONNECTED - Show amount input and Back button */
+                <div className="space-y-3">
+                  {/* Amount Input */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="0.001"
+                        step="0.001"
+                        placeholder="0.00"
+                        value={contributionAmount}
+                        onChange={(e) => setContributionAmount(e.target.value)}
+                        className="w-full pl-4 pr-14 py-3 bg-slate-900 border border-slate-700
+                          rounded-xl text-white placeholder-slate-600
+                          focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500
+                          transition-all duration-200 text-sm font-semibold"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        DEV
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      {['0.01', '0.1', '1'].map((preset) => (
+                        <button
+                          key={preset}
+                          onClick={() => setContributionAmount(preset)}
+                          className="px-3 py-2 rounded-lg bg-slate-700 text-slate-300
+                            hover:bg-slate-600 text-xs font-medium transition-colors"
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quick amounts */}
+                  <div className="flex gap-2">
+                    {['5', '10', '25', '50'].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => setContributionAmount(amount)}
+                        className="flex-1 px-2 py-2 rounded-lg bg-slate-700/50 text-slate-300
+                          hover:bg-pink-500/20 hover:text-pink-400 text-xs font-semibold transition-colors"
+                      >
+                        {amount} DEV
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -471,26 +512,31 @@ export default function ProposalDetailModal({
             </button>
           ) : (
             <>
+              {/* Close button - secondary action, smaller */}
               <button
                 onClick={onClose}
-                className="flex-1 px-4 py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold text-sm
+                className="px-4 py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold text-sm
                   hover:bg-slate-600 hover:text-white transition-all duration-200"
               >
                 Close
               </button>
 
-              {/* Back this Project */}
-              {showContributeBtn && (
+              {/* Back this Project (only when connected) */}
+              {showContributeBtn && isConnected && (
                 <button
                   onClick={handleContribute}
-                  disabled={isContributing}
+                  disabled={isContributing || !contributionAmount}
                   className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
                     flex items-center justify-center gap-2 transition-all duration-200
                     text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95
-                    disabled:opacity-60 disabled:cursor-wait"
+                    disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: 'linear-gradient(135deg, #E6007A, #a855f7)' }}
                 >
-                  {isContributing ? <><Spinner /> Confirming…</> : '💜 Back this Project'}
+                  {isContributing ? (
+                    <><Spinner /> Confirming…</>
+                  ) : (
+                    <>💜 Back this Project</>
+                  )}
                 </button>
               )}
 

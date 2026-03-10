@@ -343,9 +343,14 @@ export function Web3Provider({ children }) {
       return { address, chainId: Number(network.chainId), walletType: info.name };
     } catch (error) {
       console.error('[Web3Context] EIP-6963 connection error:', error);
-      if (error.code === 4001) {
-        throw new Error('Connection rejected by user');
+      
+      // Handle user rejection silently - don't throw, just log
+      if (error.code === 4001 || error.message?.includes('rejected')) {
+        console.log('[Web3Context] Connection rejected by user - no action needed');
+        return null;
       }
+      
+      // For other errors, throw so caller can handle
       throw error;
     } finally {
       setIsConnecting(false);
@@ -388,11 +393,18 @@ export function Web3Provider({ children }) {
       return { account, walletType };
     } catch (error) {
       console.error('[Web3Context] Connect error:', error);
-      if (error.code === 4001) {
-        throw new Error('Connection rejected by user');
+      
+      // Handle user rejection silently - don't throw, just log
+      // This prevents the app from crashing when user cancels
+      if (error.code === 4001 || error.message?.includes('rejected') || error.message?.includes('User rejected')) {
+        console.log('[Web3Context] Connection rejected by user - no action needed');
+        return null;
       }
+      
+      // For other errors, throw so caller can handle
       throw error;
     } finally {
+      // Always reset loading state, even on error
       setIsConnecting(false);
     }
   }, [isConnected, connectMetaMask, connectPhantomEVM, connectWithProvider, account, walletType]);
