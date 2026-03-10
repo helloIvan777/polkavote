@@ -1,9 +1,25 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PolkaVoteLogo, ConnectWalletButton } from '../components/Header';
+
+/**
+ * Returns true once the user has scrolled the main content area at least 1px.
+ * Used to show the header shadow only when scrolling.
+ */
+function useScrolled(ref) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const el = ref?.current;
+    if (!el) return;
+    const onScroll = () => setScrolled(el.scrollTop > 4);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [ref]);
+  return scrolled;
+}
 
 /**
  * Navigation Icons
@@ -76,7 +92,7 @@ const navItems = [
  */
 function DesktopSidebar({ pathname }) {
   return (
-    <aside className="hidden lg:flex flex-col w-64 bg-slate-800 border-r border-slate-700/50 min-h-screen">
+    <aside className="hidden lg:flex flex-col w-64 bg-slate-800 border-r border-slate-700/50 h-full flex-shrink-0 overflow-y-auto">
       {/* Logo Section */}
       <div className="p-6 border-b border-slate-700/50">
         <Link href="/" className="flex items-center gap-3 group">
@@ -157,9 +173,20 @@ function MobileBottomNav({ pathname }) {
 /**
  * Desktop Top Header Component
  */
-function DesktopTopBar() {
+function DesktopTopBar({ scrolled }) {
   return (
-    <header className="hidden lg:flex items-center justify-between bg-slate-800 border-b border-slate-700/50 px-6 py-3">
+    <header
+      className={`
+        hidden lg:flex items-center justify-between
+        sticky top-0 z-50
+        px-6 py-3
+        border-b border-white/10
+        backdrop-blur-[12px]
+        transition-shadow duration-300
+        ${scrolled ? 'shadow-[0_4px_24px_rgba(0,0,0,0.4)]' : ''}
+      `}
+      style={{ backgroundColor: 'rgba(13, 15, 19, 0.82)' }}
+    >
       <div className="flex items-center gap-2">
         <PolkaVoteLogo className="w-8 h-8" />
         <span className="text-lg font-bold text-white">PolkaVote</span>
@@ -176,19 +203,32 @@ function DesktopTopBar() {
  */
 export default function Layout({ children }) {
   const pathname = usePathname();
+  const scrollRef = React.useRef(null);
+  const scrolled = useScrolled(scrollRef);
 
   return (
-    <div className="min-h-screen bg-slate-900 flex">
-      {/* Desktop Sidebar */}
+    <div className="h-screen bg-slate-900 flex overflow-hidden">
+      {/* Desktop Sidebar — sticky, full viewport height */}
       <DesktopSidebar pathname={pathname} />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-h-screen">
+      {/* Main Content Area — THIS is the scroll container, h-full keeps it viewport-locked */}
+      <main ref={scrollRef} className="flex-1 flex flex-col h-full overflow-y-auto">
         {/* Desktop Top Bar */}
-        <DesktopTopBar />
+        <DesktopTopBar scrolled={scrolled} />
 
         {/* Mobile Header */}
-        <header className="lg:hidden bg-slate-800 border-b border-slate-700/50 px-4 py-3">
+        <header
+          className={`
+            lg:hidden
+            sticky top-0 z-50
+            px-4 py-3
+            border-b border-white/10
+            backdrop-blur-[12px]
+            transition-shadow duration-300
+            ${scrolled ? 'shadow-[0_4px_24px_rgba(0,0,0,0.4)]' : ''}
+          `}
+          style={{ backgroundColor: 'rgba(13, 15, 19, 0.82)' }}
+        >
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
               <PolkaVoteLogo className="w-8 h-8" />

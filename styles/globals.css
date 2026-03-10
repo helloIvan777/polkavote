@@ -20,6 +20,13 @@
 
 /* Base styles */
 @layer base {
+  html,
+  body {
+    height: 100%;
+    /* Prevent the body itself from scrolling — <main> in Layout owns the scroll */
+    overflow: hidden;
+  }
+
   html {
     @apply scroll-smooth;
   }
