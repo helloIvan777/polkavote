@@ -3,8 +3,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
 
-const STORAGE_KEY = 'polkavote_connected';
-const WALLET_TYPE_KEY = 'polkavote_wallet_type';
+// localStorage keys
+const STORAGE_KEY      = 'shouldConnect';     // 'true' when user has connected
+const STORAGE_KEY_OLD  = 'polkavote_connected'; // legacy key — migrated on first read
+const WALLET_TYPE_KEY  = 'polkavote_wallet_type';
 
 // Moonbase Alpha Chain ID
 const MOONBASE_ALPHA_CHAIN_ID = 1287;
@@ -320,6 +322,7 @@ export function Web3Provider({ children }) {
     setShowWalletModal(false);
     setWalletType(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY_OLD);
     localStorage.removeItem(WALLET_TYPE_KEY);
     console.log('[Web3Context] Wallet disconnected');
   }, []);
@@ -351,7 +354,15 @@ export function Web3Provider({ children }) {
     console.log('[Web3Context] Checking existing connection...');
 
     const savedWalletType = localStorage.getItem(WALLET_TYPE_KEY);
-    const shouldConnect = localStorage.getItem(STORAGE_KEY) === 'true';
+
+    // Migrate legacy key → new key on first read
+    let shouldConnect = localStorage.getItem(STORAGE_KEY) === 'true';
+    if (!shouldConnect && localStorage.getItem(STORAGE_KEY_OLD) === 'true') {
+      shouldConnect = true;
+      localStorage.setItem(STORAGE_KEY, 'true');
+      localStorage.removeItem(STORAGE_KEY_OLD);
+      console.log('[Web3Context] Migrated legacy storage key.');
+    }
 
     console.log('[Web3Context] localStorage shouldConnect:', shouldConnect, 'walletType:', savedWalletType);
 
@@ -425,6 +436,7 @@ export function Web3Provider({ children }) {
       if (!isNetworkError) {
         console.log('[Web3Context] Clearing stored session (non-network error).');
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY_OLD);
         localStorage.removeItem(WALLET_TYPE_KEY);
       } else {
         console.log('[Web3Context] Network error during reconnect — keeping storage for next refresh.');
@@ -476,48 +488,48 @@ export function Web3Provider({ children }) {
   }, []);
 
   /**
-   * EFFECT 1 — Run once on mount: silently restore any prior connection.
-   * Waits for the wallet extension to finish injecting into window.ethereum
-   * before calling checkExistingConnection, to avoid a race where the
-   * provider is not yet available and the restore silently fails.
+   * EFFECT 1 — Eager connect on mount.
+   *
+   * WHY NOT A REF GUARD: React 18 Strict Mode double-invokes effects in dev.
+   * A ref set in the first mount survives the remount (refs persist across
+   * strict-mode cycles), so the second (real) mount sees it as already set
+   * and SKIPS the eager connect entirely. The fix: use the localStorage flag
+   * itself as the idempotency guard — it is immune to remounting.
+   *
+   * We still need to wait for the wallet extension to inject itself, so we
+   * listen for 'ethereum#initialized' with a 500 ms fallback for Phantom.
    */
-  const didCheckConnection = React.useRef(false);
   useEffect(() => {
-    if (didCheckConnection.current) return;
-    didCheckConnection.current = true;
+    if (typeof window === 'undefined') return;
 
     const savedWalletType = localStorage.getItem(WALLET_TYPE_KEY);
-    const shouldReconnect = localStorage.getItem(STORAGE_KEY) === 'true';
+    const shouldReconnect  =
+      localStorage.getItem(STORAGE_KEY) === 'true' ||
+      localStorage.getItem(STORAGE_KEY_OLD) === 'true';
 
-    // If nothing is saved, skip entirely — don't bother waiting.
     if (!shouldReconnect || !savedWalletType) {
-      console.log('[Web3Context] No saved session, skipping auto-connect.');
+      console.log('[Web3Context] No saved session — skipping eager connect.');
       return;
     }
 
     console.log('[Web3Context] Saved session found, waiting for wallet extension...');
 
+    let ran = false;
     const runCheck = () => {
+      if (ran) return;   // prevent double-fire from event + timeout both firing
+      ran = true;
       console.log('[Web3Context] Extension ready — running checkExistingConnection');
       checkExistingConnection();
     };
 
-    if (typeof window === 'undefined') return;
-
-    // MetaMask fires 'ethereum#initialized' when its provider is fully ready.
-    // Phantom doesn't fire this event, so we also set a max-wait fallback.
-    const timeout = setTimeout(runCheck, 500); // fallback: run after 500 ms
-
-    const onEthereumInit = () => {
-      clearTimeout(timeout);
-      runCheck();
-    };
-
-    window.addEventListener('ethereum#initialized', onEthereumInit, { once: true });
+    // MetaMask fires this when fully injected; Phantom does not.
+    window.addEventListener('ethereum#initialized', runCheck, { once: true });
+    // Fallback: if the event never fires (Phantom, or already injected) run after 500 ms.
+    const timeout = setTimeout(runCheck, 500);
 
     return () => {
       clearTimeout(timeout);
-      window.removeEventListener('ethereum#initialized', onEthereumInit);
+      window.removeEventListener('ethereum#initialized', runCheck);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
