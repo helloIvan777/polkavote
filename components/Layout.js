@@ -57,27 +57,6 @@ function ProfileIcon({ className = "w-6 h-6" }) {
 }
 
 /**
- * Nano Banana Integration Badge
- */
-function NanoBananaBadge() {
-  return (
-    <div className="mt-auto p-4">
-      <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-            <span className="text-white text-sm">🍌</span>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-yellow-400">Nano Banana</p>
-            <p className="text-[10px] text-slate-400">Integration Ready</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * Navigation Items Configuration
  */
 const navItems = [
@@ -128,9 +107,6 @@ function DesktopSidebar({ pathname }) {
           );
         })}
       </nav>
-
-      {/* Nano Banana Badge */}
-      <NanoBananaBadge />
     </aside>
   );
 }
