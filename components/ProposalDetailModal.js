@@ -113,6 +113,7 @@ export default function ProposalDetailModal({
   const [contributionAmount, setContributionAmount] = useState('');
   const [userContribution, setUserContribution]     = useState(0);   // DEV, float
   const [isLoadingContrib, setIsLoadingContrib]     = useState(false);
+  const [isContributing, setIsContributing]         = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast  = useCallback((message, type = 'info') => setToast({ message, type }), []);
@@ -203,11 +204,28 @@ export default function ProposalDetailModal({
       showToast('Please connect your wallet first.', 'warning');
       return;
     }
+
     try {
+      setIsContributing(true);
       await onContribute(proposal.id, contributionAmount);
+      
+      // Success!
       setContributionAmount('');
+      showToast('🚀 Contribution successful! You are now a backer.', 'success');
+      
+      // Auto-close modal after a short delay
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (err) {
-      showToast(err.message || 'Contribution failed.', 'error');
+      // Handle user rejection or failure
+      if (err.code === 4001 || err.message?.includes('rejected')) {
+        showToast('Transaction cancelled.', 'error');
+      } else {
+        showToast(err.message || 'Transaction failed. Please try again.', 'error');
+      }
+    } finally {
+      setIsContributing(false);
     }
   };
 
@@ -413,14 +431,14 @@ export default function ProposalDetailModal({
           {showContributeBtn && (
             <button
               onClick={handleContribute}
-              disabled={isActing}
+              disabled={isContributing}
               className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
                 flex items-center justify-center gap-2 transition-all duration-200
                 text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95
                 disabled:opacity-60 disabled:cursor-wait"
               style={{ background: 'linear-gradient(135deg, #E6007A, #a855f7)' }}
             >
-              {isActing ? <><Spinner /> Processing…</> : '💜 Back this Project'}
+              {isContributing ? <><Spinner /> Confirming…</> : '💜 Back this Project'}
             </button>
           )}
 
