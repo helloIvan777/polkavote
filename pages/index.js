@@ -60,7 +60,7 @@ function ProjectCardSkeleton() {
 /**
  * Empty State Component
  */
-function EmptyState({ onAddProject }) {
+function EmptyState({ onAddProject, hasWallet }) {
   return (
     <div className="text-center py-16">
       <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -71,7 +71,10 @@ function EmptyState({ onAddProject }) {
       </div>
       <h3 className="text-xl font-bold text-white mb-2">No Projects Yet</h3>
       <p className="text-slate-400 mb-6 max-w-md mx-auto">
-        Be the first to launch a crowdfunding project on Polkadot!
+        {hasWallet
+          ? "Be the first to launch a crowdfunding project on Polkadot!"
+          : "Connect your wallet to launch a crowdfunding project on Polkadot!"
+        }
       </p>
       <button
         onClick={onAddProject}
@@ -79,7 +82,7 @@ function EmptyState({ onAddProject }) {
           hover:from-pink-600 hover:to-pink-700 transition-all duration-200
           hover:shadow-lg hover:shadow-pink-500/30"
       >
-        Launch a Project
+        {hasWallet ? 'Launch a Project' : 'Connect Wallet to Launch'}
       </button>
     </div>
   );
@@ -99,6 +102,7 @@ export default function HomePage() {
   const [actingStates, setActingStates] = useState({}); // projectId => bool
   const [stats, setStats]             = useState({ projectCount: 0, totalRaised: 0 });
   const [error, setError]             = useState(null);
+  const [isPendingLaunch, setIsPendingLaunch] = useState(false); // Pending launch intent
 
   const projectsSectionRef = React.useRef(null);
 
@@ -110,6 +114,30 @@ export default function HomePage() {
     Ecosystem: 'bg-green-500 text-white shadow-lg shadow-green-500/25',
     Community: 'bg-purple-500 text-white shadow-lg shadow-purple-500/25',
   };
+
+  // ── The Guard: Wallet Connection Check with Auto-Launch ──────────────────
+  const handleLaunchClick = () => {
+    if (account) {
+      // Wallet connected - open the modal immediately
+      console.log('[HomePage] Wallet connected, opening launch modal');
+      setIsModalOpen(true);
+    } else {
+      // Wallet not connected - set pending intent and trigger connection
+      console.log('[HomePage] Wallet not connected, setting pending launch and connecting...');
+      setIsPendingLaunch(true);
+      connectWallet();
+    }
+  };
+
+  // ── Auto-Launch Hook: Opens modal after wallet connects ──────────────────
+  useEffect(() => {
+    // If the wallet just connected AND we have a pending launch intent
+    if (account && isPendingLaunch) {
+      console.log('[HomePage] Wallet connected with pending launch - opening modal!');
+      setIsModalOpen(true);      // 1. Open the modal
+      setIsPendingLaunch(false); // 2. Clear the intent flag
+    }
+  }, [account, isPendingLaunch]);
 
   const filteredProjects = activeCategory === 'All'
     ? projects
@@ -267,7 +295,7 @@ export default function HomePage() {
 
             {/* Right: Launch Button (Desktop) */}
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleLaunchClick}
               className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-pink-600
                 text-white rounded-xl font-medium text-sm
                 hover:from-pink-600 hover:to-pink-700 transition-all duration-200
@@ -282,7 +310,7 @@ export default function HomePage() {
 
           {/* Mobile Launch Button */}
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleLaunchClick}
             className="sm:hidden mt-4 w-full flex items-center justify-center gap-2 px-4 py-3
               bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
               hover:from-pink-600 hover:to-pink-700 transition-all duration-200
@@ -337,7 +365,7 @@ export default function HomePage() {
             </div>
           ) : filteredProjects.length === 0 ? (
             activeCategory === 'All' ? (
-              <EmptyState onAddProject={() => setIsModalOpen(true)} />
+              <EmptyState onAddProject={handleLaunchClick} hasWallet={!!account} />
             ) : (
               <div className="text-center py-16">
                 <p className="text-slate-400 text-lg">
