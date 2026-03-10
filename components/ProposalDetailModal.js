@@ -114,6 +114,7 @@ export default function ProposalDetailModal({
   const [userContribution, setUserContribution]     = useState(0);   // DEV, float
   const [isLoadingContrib, setIsLoadingContrib]     = useState(false);
   const [isContributing, setIsContributing]         = useState(false);
+  const [isSuccess, setIsSuccess]                   = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast  = useCallback((message, type = 'info') => setToast({ message, type }), []);
@@ -209,14 +210,14 @@ export default function ProposalDetailModal({
       setIsContributing(true);
       await onContribute(proposal.id, contributionAmount);
       
-      // Success!
+      // Success! Show success state
       setContributionAmount('');
-      showToast('🚀 Contribution successful! You are now a backer.', 'success');
+      setIsSuccess(true);
       
-      // Auto-close modal after a short delay
+      // Auto-close modal after 4 seconds
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 4000);
     } catch (err) {
       // Handle user rejection or failure
       if (err.code === 4001 || err.message?.includes('rejected')) {
@@ -373,8 +374,8 @@ export default function ProposalDetailModal({
             </div>
           )}
 
-          {/* ── Contribution Input (only if campaign is active) ── */}
-          {showContributeBtn && (
+          {/* ── Contribution Section (only if campaign is active) ── */}
+          {showContributeBtn && !isSuccess && (
             <div className="rounded-xl border border-white/10 p-4 space-y-3"
               style={{ background: 'rgba(255,255,255,0.03)' }}>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -413,71 +414,105 @@ export default function ProposalDetailModal({
               </div>
             </div>
           )}
+
+          {/* ── Success State ── */}
+          {isSuccess && (
+            <div className="rounded-xl border border-emerald-500/30 p-6 text-center space-y-4"
+              style={{ background: 'rgba(16,185,129,0.1)' }}>
+              {/* Animated Checkmark Icon */}
+              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center animate-bounce">
+                <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-emerald-400 mb-1">
+                  Transaction Confirmed!
+                </h3>
+                <p className="text-slate-300 text-sm">
+                  Thank you for your support. Closing soon...
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Footer ── */}
         <div className="relative px-6 py-4 border-t border-slate-700/50 flex gap-3 shrink-0">
           {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
 
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold text-sm
-              hover:bg-slate-600 hover:text-white transition-all duration-200"
-          >
-            Close
-          </button>
-
-          {/* Back this Project */}
-          {showContributeBtn && (
+          {/* Success State - Single Close Button */}
+          {isSuccess ? (
             <button
-              onClick={handleContribute}
-              disabled={isContributing}
-              className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
-                flex items-center justify-center gap-2 transition-all duration-200
-                text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95
-                disabled:opacity-60 disabled:cursor-wait"
-              style={{ background: 'linear-gradient(135deg, #E6007A, #a855f7)' }}
+              onClick={onClose}
+              className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm
+                transition-all duration-200"
             >
-              {isContributing ? <><Spinner /> Confirming…</> : '💜 Back this Project'}
+              Close
             </button>
-          )}
+          ) : (
+            <>
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold text-sm
+                  hover:bg-slate-600 hover:text-white transition-all duration-200"
+              >
+                Close
+              </button>
 
-          {/* Withdraw Funds (creator, goal met, deadline passed) */}
-          {showWithdrawBtn && (
-            <button
-              onClick={handleWithdraw}
-              disabled={isActing}
-              className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
-                flex items-center justify-center gap-2 transition-all duration-200
-                bg-emerald-600 hover:bg-emerald-500 text-white
-                hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95
-                disabled:opacity-60 disabled:cursor-wait"
-            >
-              {isActing ? <><Spinner /> Processing…</> : '🏦 Withdraw Funds'}
-            </button>
-          )}
+              {/* Back this Project */}
+              {showContributeBtn && (
+                <button
+                  onClick={handleContribute}
+                  disabled={isContributing}
+                  className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                    flex items-center justify-center gap-2 transition-all duration-200
+                    text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95
+                    disabled:opacity-60 disabled:cursor-wait"
+                  style={{ background: 'linear-gradient(135deg, #E6007A, #a855f7)' }}
+                >
+                  {isContributing ? <><Spinner /> Confirming…</> : '💜 Back this Project'}
+                </button>
+              )}
 
-          {/* Claim Refund (backer, goal not met, deadline passed) */}
-          {showRefundBtn && (
-            <button
-              onClick={handleRefund}
-              disabled={isActing}
-              className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
-                flex items-center justify-center gap-2 transition-all duration-200
-                bg-amber-600 hover:bg-amber-500 text-white
-                hover:shadow-lg hover:shadow-amber-500/30 active:scale-95
-                disabled:opacity-60 disabled:cursor-wait"
-            >
-              {isActing ? <><Spinner /> Processing…</> : '↩ Claim Refund'}
-            </button>
-          )}
+              {/* Withdraw Funds (creator, goal met, deadline passed) */}
+              {showWithdrawBtn && (
+                <button
+                  onClick={handleWithdraw}
+                  disabled={isActing}
+                  className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                    flex items-center justify-center gap-2 transition-all duration-200
+                    bg-emerald-600 hover:bg-emerald-500 text-white
+                    hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95
+                    disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {isActing ? <><Spinner /> Processing…</> : '🏦 Withdraw Funds'}
+                </button>
+              )}
 
-          {/* Expired, no action available */}
-          {showDisabledBtn && (
-            <button disabled className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
-              bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600">
-              {disabledBtnLabel}
-            </button>
+              {/* Claim Refund (backer, goal not met, deadline passed) */}
+              {showRefundBtn && (
+                <button
+                  onClick={handleRefund}
+                  disabled={isActing}
+                  className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                    flex items-center justify-center gap-2 transition-all duration-200
+                    bg-amber-600 hover:bg-amber-500 text-white
+                    hover:shadow-lg hover:shadow-amber-500/30 active:scale-95
+                    disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {isActing ? <><Spinner /> Processing…</> : '↩ Claim Refund'}
+                </button>
+              )}
+
+              {/* Expired, no action available */}
+              {showDisabledBtn && (
+                <button disabled className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                  bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600">
+                  {disabledBtnLabel}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
