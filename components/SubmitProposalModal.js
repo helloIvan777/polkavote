@@ -78,9 +78,29 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
+      {/* Backdrop with fade-in animation */}
+      <div 
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300" 
+        onClick={handleClose}
+      />
 
-      <div className="relative bg-slate-800 rounded-2xl w-full max-w-lg shadow-2xl border border-slate-700/50 overflow-hidden">
+      {/* Modal content with scale and fade animation */}
+      <div className="relative bg-slate-800 rounded-2xl w-full max-w-lg shadow-2xl border border-slate-700/50 overflow-hidden animate-modal-enter">
+        <style jsx>{`
+          @keyframes modal-enter {
+            from {
+              opacity: 0;
+              transform: scale(0.95) translateY(-10px);
+            }
+            to {
+              opacity: 1;
+              transform: scale(1) translateY(0);
+            }
+          }
+          .animate-modal-enter {
+            animation: modal-enter 0.3s ease-out forwards;
+          }
+        `}</style>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
           <div>
