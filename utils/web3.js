@@ -1,112 +1,132 @@
 /**
- * PolkaVote Web3 Contract Utilities
+ * PolkaFund Web3 Contract Utilities
  * Uses ethers.js v6 for blockchain interactions
  */
 
 import { ethers } from 'ethers';
 
-export const POLKAVOTE_ABI = [
+export const POLKAFUND_ABI = [
+  // ── Write functions ──────────────────────────────────────────────────────
   {
     "inputs": [
-      { "internalType": "string", "name": "_title", "type": "string" },
-      { "internalType": "string", "name": "_description", "type": "string" },
-      { "internalType": "string", "name": "_category", "type": "string" },
+      { "internalType": "string",  "name": "_title",          "type": "string"  },
+      { "internalType": "string",  "name": "_description",    "type": "string"  },
+      { "internalType": "string",  "name": "_category",       "type": "string"  },
+      { "internalType": "uint256", "name": "_targetAmount",   "type": "uint256" },
       { "internalType": "uint256", "name": "_durationInDays", "type": "uint256" }
     ],
-    "name": "addProposal",
+    "name": "addProject",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "uint256", "name": "_proposalId", "type": "uint256" }],
-    "name": "vote",
+    "inputs": [{ "internalType": "uint256", "name": "_projectId", "type": "uint256" }],
+    "name": "contribute",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_projectId", "type": "uint256" }],
+    "name": "withdrawFunds",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "uint256", "name": "_projectId", "type": "uint256" }],
+    "name": "claimRefund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // ── View functions ───────────────────────────────────────────────────────
+  {
     "inputs": [],
-    "name": "getAllProposals",
+    "name": "getAllProjects",
     "outputs": [
-      { "internalType": "uint256[]", "name": "ids", "type": "uint256[]" },
-      { "internalType": "address[]", "name": "proposers", "type": "address[]" },
-      { "internalType": "string[]", "name": "titles", "type": "string[]" },
-      { "internalType": "string[]", "name": "descriptions", "type": "string[]" },
-      { "internalType": "string[]", "name": "categories", "type": "string[]" },
-      { "internalType": "uint256[]", "name": "voteCounts", "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "timestamps", "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "deadlines", "type": "uint256[]" }
+      { "internalType": "uint256[]", "name": "ids",            "type": "uint256[]" },
+      { "internalType": "address[]", "name": "creators",       "type": "address[]" },
+      { "internalType": "string[]",  "name": "titles",         "type": "string[]"  },
+      { "internalType": "string[]",  "name": "descriptions",   "type": "string[]"  },
+      { "internalType": "string[]",  "name": "categories",     "type": "string[]"  },
+      { "internalType": "uint256[]", "name": "targetAmounts",  "type": "uint256[]" },
+      { "internalType": "uint256[]", "name": "raisedAmounts",  "type": "uint256[]" },
+      { "internalType": "uint256[]", "name": "timestamps",     "type": "uint256[]" },
+      { "internalType": "uint256[]", "name": "deadlines",      "type": "uint256[]" },
+      { "internalType": "bool[]",    "name": "withdrawnFlags", "type": "bool[]"    }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "uint256", "name": "_proposalId", "type": "uint256" }],
-    "name": "getProposal",
-    "outputs": [
-      { "internalType": "uint256", "name": "id", "type": "uint256" },
-      { "internalType": "address", "name": "proposer", "type": "address" },
-      { "internalType": "string", "name": "title", "type": "string" },
-      { "internalType": "string", "name": "description", "type": "string" },
-      { "internalType": "uint256", "name": "voteCount", "type": "uint256" },
-      { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
-    "name": "getProposalCount",
+    "name": "getProjectCount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getTotalVotes",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
+    // Public mapping auto-getter: contributions[projectId][address] => uint256
     "inputs": [
-      { "internalType": "uint256", "name": "_proposalId", "type": "uint256" },
-      { "internalType": "address", "name": "_voter", "type": "address" }
+      { "internalType": "uint256", "name": "", "type": "uint256" },
+      { "internalType": "address", "name": "", "type": "address" }
     ],
-    "name": "checkVoted",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "name": "contributions",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
+  // ── Events ───────────────────────────────────────────────────────────────
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "proposalId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "proposer", "type": "address" },
-      { "indexed": false, "internalType": "string", "name": "title", "type": "string" }
+      { "indexed": true,  "internalType": "uint256", "name": "projectId",    "type": "uint256" },
+      { "indexed": true,  "internalType": "address", "name": "creator",      "type": "address" },
+      { "indexed": false, "internalType": "string",  "name": "title",        "type": "string"  },
+      { "indexed": false, "internalType": "uint256", "name": "targetAmount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "deadline",     "type": "uint256" }
     ],
-    "name": "ProposalCreated",
+    "name": "ProjectCreated",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "proposalId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "voter", "type": "address" }
+      { "indexed": true,  "internalType": "uint256", "name": "projectId",      "type": "uint256" },
+      { "indexed": true,  "internalType": "address", "name": "backer",         "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount",         "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "newRaisedAmount","type": "uint256" }
     ],
-    "name": "VoteCast",
+    "name": "ContributionMade",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType": "uint256", "name": "projectId", "type": "uint256" },
+      { "indexed": true,  "internalType": "address", "name": "creator",   "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount",    "type": "uint256" }
+    ],
+    "name": "FundsWithdrawn",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType": "uint256", "name": "projectId", "type": "uint256" },
+      { "indexed": true,  "internalType": "address", "name": "backer",    "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount",    "type": "uint256" }
+    ],
+    "name": "RefundClaimed",
     "type": "event"
   }
 ];
 
-// ⚠️  VERIFY THIS ADDRESS on https://moonbase.moonscan.io before deploying.
-// The address below was provided by the user. Note: a valid EVM address is
-// exactly 40 hex characters after '0x'. Double-check if calls fail.
-export const CONTRACT_ADDRESS = "0x5773B35548A7ed7B6F5DF5A05AfcA27D473A6D26";
+export const CONTRACT_ADDRESS = "0x8c26a85029118ebC1bc50F9B9a7CD1ea75a8f496";
 
-// Moonbase Alpha RPC endpoints — blastapi is primary for read-only (more stable),
-// official endpoint kept as signer provider fallback.
+// Moonbase Alpha RPC endpoints
 const RPC_URLS = [
   "https://moonbase-alpha.public.blastapi.io",
   "https://rpc.api.moonbase.moonbeam.network",
@@ -122,10 +142,6 @@ export function getProvider() {
   return provider;
 }
 
-/**
- * Always returns a stable JsonRpcProvider for read-only calls.
- * Never depends on window.ethereum — works before the extension is ready.
- */
 export function getReadOnlyProvider() {
   const provider = new ethers.JsonRpcProvider(RPC_URLS[0]);
   provider.pollingInterval = 4000;
@@ -133,378 +149,293 @@ export function getReadOnlyProvider() {
 }
 
 export function getContract(signer) {
-  console.log('[web3.js] getContract called, has signer:', !!signer);
-  console.log('[web3.js] Contract address:', CONTRACT_ADDRESS);
-
-  if (!signer) {
-    console.error('[web3.js] ERROR: No signer provided to getContract');
-    throw new Error('Signer is required for contract interactions');
-  }
-
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, signer);
-  console.log('[web3.js] Contract instance created');
-  return contract;
+  if (!signer) throw new Error('Signer is required for contract interactions');
+  return new ethers.Contract(CONTRACT_ADDRESS, POLKAFUND_ABI, signer);
 }
 
 export function getReadOnlyContract() {
-  const provider = getReadOnlyProvider();
-  return new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, provider);
+  return new ethers.Contract(CONTRACT_ADDRESS, POLKAFUND_ABI, getReadOnlyProvider());
 }
 
-/** Create a read-only contract bound to a specific RPC URL (used for fallback). */
 function createReadOnlyContract(rpcUrl) {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   provider.pollingInterval = 4000;
-  return new ethers.Contract(CONTRACT_ADDRESS, POLKAVOTE_ABI, provider);
+  return new ethers.Contract(CONTRACT_ADDRESS, POLKAFUND_ABI, provider);
 }
 
-export async function addProposal(title, description, category, durationInDays, signer) {
-  console.log('========================================');
-  console.log('[web3.js] addProposal called');
-  console.log('[web3.js] Title:', title, '| Category:', category, '| Duration:', durationInDays, 'days');
-  console.log('[web3.js] Contract address:', CONTRACT_ADDRESS);
-  console.log('========================================');
+// ── tx.wait() wrapper (handles Moonbase Alpha RPC timeouts gracefully) ───────
+async function waitForTx(tx, pendingPayload) {
+  try {
+    const receipt = await tx.wait();
+    return { receipt, pending: false };
+  } catch (waitError) {
+    const msg = waitError?.message?.toLowerCase() ?? '';
+    const isFetchError =
+      msg.includes('failed to fetch') ||
+      msg.includes('fetch failed') ||
+      msg.includes('network error') ||
+      msg.includes('etimedout') ||
+      waitError?.code === 'NETWORK_ERROR' ||
+      waitError?.code === 'TIMEOUT';
+
+    if (isFetchError) {
+      console.warn('[web3.js] tx.wait() hit a fetch error — tx was sent OK. Hash:', tx.hash);
+      return { receipt: null, pending: true, txHash: tx.hash, ...pendingPayload };
+    }
+    throw waitError;
+  }
+}
+
+// ── Standard error classifier ─────────────────────────────────────────────────
+function classifyError(error, context = 'operation') {
+  if (error.code === 4001) throw new Error('Transaction rejected by user');
+  if (error.code === 'INSUFFICIENT_FUNDS' || error.message?.includes('insufficient funds'))
+    throw new Error('Insufficient DEV tokens for gas. Add DEV to your wallet.');
+  if (error.message?.includes('execution reverted') || error.message?.includes('revert'))
+    throw new Error(error.reason || error.message || `Contract reverted during ${context}`);
+  if (error.message?.includes('failed to fetch') || error.code === 'NETWORK_ERROR')
+    throw new Error('Network error. Check your connection and try again.');
+  throw new Error(error.message || `Failed to ${context}. Please try again.`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// addProject
+// ─────────────────────────────────────────────────────────────────────────────
+export async function addProject(title, description, category, targetAmountDev, durationInDays, signer) {
+  console.log('[web3.js] addProject called:', { title, category, targetAmountDev, durationInDays });
+
+  if (!title?.trim())       throw new Error('Title is required');
+  if (title.length > 200)   throw new Error('Title too long (max 200 chars)');
+  if (!description?.trim()) throw new Error('Description is required');
+  if (description.length > 1000) throw new Error('Description too long (max 1000 chars)');
+  if (!category?.trim())    throw new Error('Category is required');
+  if (!targetAmountDev || parseFloat(targetAmountDev) <= 0) throw new Error('Target amount must be greater than 0');
+  if (!durationInDays || durationInDays < 1 || durationInDays > 90) throw new Error('Duration must be 1–90 days');
+  if (!signer) throw new Error('Wallet not connected. Please connect your wallet first.');
 
   try {
-    if (!title || !title.trim()) throw new Error('Title is empty or missing');
-    if (!description || !description.trim()) throw new Error('Description is empty or missing');
-    if (title.length > 200) throw new Error(`Title too long: ${title.length} characters (max 200)`);
-    if (description.length > 1000) throw new Error(`Description too long: ${description.length} characters (max 1000)`);
-    if (!category || !category.trim()) throw new Error('Category is required');
-    if (!durationInDays || durationInDays < 1 || durationInDays > 30) throw new Error('Duration must be 1–30 days');
-    if (!signer) throw new Error('Wallet not connected. Please connect your wallet first.');
-
     const contract = getContract(signer);
-    console.log('[web3.js] Sending transaction...');
+    const targetWei = ethers.parseEther(String(targetAmountDev));
 
-    const tx = await contract.addProposal(
-      title.trim(), description.trim(), category.trim(), durationInDays,
+    const tx = await contract.addProject(
+      title.trim(), description.trim(), category.trim(), targetWei, durationInDays,
       { gasLimit: 3000000 }
     );
+    console.log('[web3.js] addProject tx sent:', tx.hash);
 
-    console.log('[web3.js] Transaction sent:', tx.hash);
-    console.log('[web3.js] Transaction gas limit:', tx.gasLimit?.toString());
-    console.log('[web3.js] Transaction gas price:', tx.gasPrice?.toString());
-    console.log('[web3.js] Waiting for confirmation...');
+    const { receipt, pending, txHash } = await waitForTx(tx, {
+      message: 'Project submitted! It may take a moment to appear.',
+    });
 
-    // --- Receipt polling (wrapped separately) ---
-    // Moonbase Alpha's RPC can be slow to serve eth_getTransactionReceipt.
-    // If the poll fails with a network/fetch error the transaction has still
-    // been accepted by the chain, so we return a graceful "pending" success
-    // rather than crashing the UI.
-    let receipt;
-    try {
-      receipt = await tx.wait();
-    } catch (waitError) {
-      const msg = waitError?.message?.toLowerCase() ?? '';
-      const isFetchError =
-        msg.includes('failed to fetch') ||
-        msg.includes('fetch failed') ||
-        msg.includes('network error') ||
-        msg.includes('etimedout') ||
-        waitError?.code === 'NETWORK_ERROR' ||
-        waitError?.code === 'TIMEOUT';
+    if (pending) return { success: true, pending: true, txHash, projectId: null };
 
-      if (isFetchError) {
-        console.warn('[web3.js] tx.wait() hit a fetch error — transaction was sent OK.', waitError);
-        console.warn('[web3.js] TX Hash:', tx.hash);
-        return {
-          success: true,
-          pending: true,
-          txHash: tx.hash,
-          proposalId: null,
-          message:
-            'Transaction sent! It might take a minute to appear on the site due to network congestion.',
-        };
-      }
-
-      // Any other error (e.g. transaction reverted on-chain) — re-throw
-      // so the outer catch can surface it to the user.
-      throw waitError;
-    }
-
-    console.log('[web3.js] Transaction confirmed:', receipt.hash);
-    console.log('[web3.js] Block number:', receipt.blockNumber);
-    console.log('[web3.js] Gas used:', receipt.gasUsed?.toString());
-    console.log('[web3.js] Status:', receipt.status);
-
-    console.log('[web3.js] Looking for ProposalCreated event...');
-    let proposalId = null;
-
-    if (receipt.logs && receipt.logs.length > 0) {
-      for (const log of receipt.logs) {
-        try {
-          const parsed = contract.interface.parseLog(log);
-          console.log('[web3.js] Parsed log:', parsed?.name, parsed?.args);
-          if (parsed && parsed.name === 'ProposalCreated') {
-            proposalId = Number(parsed.args[0]);
-            console.log('[web3.js] Found ProposalCreated event, proposalId:', proposalId);
-            break;
-          }
-        } catch (e) {
-          // Skip logs that can't be parsed
+    // Parse ProjectCreated event for the new project ID
+    let projectId = null;
+    for (const log of (receipt.logs ?? [])) {
+      try {
+        const parsed = contract.interface.parseLog(log);
+        if (parsed?.name === 'ProjectCreated') {
+          projectId = Number(parsed.args[0]);
+          break;
         }
-      }
+      } catch (_) { /* skip unparsable logs */ }
     }
 
-    console.log('========================================');
-    console.log('[web3.js] addProposal SUCCESS');
-    console.log('[web3.js] Proposal ID:', proposalId);
-    console.log('[web3.js] TX Hash:', receipt.hash);
-    console.log('========================================');
-
-    return {
-      success: true,
-      pending: false,
-      txHash: receipt.hash,
-      proposalId,
-    };
+    console.log('[web3.js] addProject SUCCESS — projectId:', projectId, 'tx:', receipt.hash);
+    return { success: true, pending: false, txHash: receipt.hash, projectId };
   } catch (error) {
-    console.error('========================================');
-    console.error('[web3.js] addProposal FAILED');
-    console.error('[web3.js] Error name:', error.name);
-    console.error('[web3.js] Error message:', error.message);
-    console.error('[web3.js] Error code:', error.code);
-    console.error('[web3.js] Error reason:', error.reason);
-    console.error('[web3.js] Error stack:', error.stack);
-    console.error('[web3.js] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-    console.error('========================================');
-
-    // Provide user-friendly error messages based on exact error details
-    if (error.code === 4001) {
-      const userMsg = 'Transaction rejected by user';
-      console.error('[web3.js] USER ERROR:', userMsg);
-      throw new Error(userMsg);
-    }
-
-    if (error.code === 'INSUFFICIENT_FUNDS' || error.message?.includes('insufficient funds')) {
-      const userMsg = 'Insufficient funds for gas. Please add DEV tokens to your wallet.';
-      console.error('[web3.js] USER ERROR:', userMsg);
-      throw new Error(userMsg);
-    }
-
-    if (error.code === 'UNPREDICTABLE_GAS_LIMIT' || error.message?.includes('gas required exceeds')) {
-      const userMsg = 'Transaction execution failed. The contract may have rejected this transaction.';
-      console.error('[web3.js] USER ERROR:', userMsg);
-      throw new Error(userMsg);
-    }
-
-    if (error.message?.includes('contract not deployed') || error.message?.includes('not deployed')) {
-      const userMsg = 'Contract not deployed at the specified address. Please verify the contract address.';
-      console.error('[web3.js] USER ERROR:', userMsg);
-      throw new Error(userMsg);
-    }
-
-    if (error.message?.includes('NETWORK_ERROR') || error.message?.includes('network')) {
-      const userMsg = 'Network error. Please check your connection and try again.';
-      console.error('[web3.js] USER ERROR:', userMsg);
-      throw new Error(userMsg);
-    }
-
-    if (error.message?.includes('timeout') || error.code === 'TIMEOUT') {
-      const userMsg = 'Transaction timed out. Please try again.';
-      console.error('[web3.js] USER ERROR:', userMsg);
-      throw new Error(userMsg);
-    }
-
-    // Default: throw the original error with message
-    const userMsg = error.message || 'Failed to submit proposal. Please try again.';
-    console.error('[web3.js] USER ERROR:', userMsg);
-    throw new Error(userMsg);
+    console.error('[web3.js] addProject error:', error);
+    classifyError(error, 'launch project');
   }
 }
 
-export async function voteOnProposal(proposalId, signer) {
-  console.log('[web3.js] voteOnProposal called, proposalId:', proposalId);
-  console.log('[web3.js] Has signer:', !!signer);
-
-  if (!signer) {
-    console.error('[web3.js] ERROR: No signer provided');
-    throw new Error('Wallet not connected');
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// contributeToProject
+// ─────────────────────────────────────────────────────────────────────────────
+export async function contributeToProject(projectId, amountDev, signer) {
+  console.log('[web3.js] contributeToProject:', { projectId, amountDev });
+  if (!signer) throw new Error('Wallet not connected');
+  if (!amountDev || parseFloat(amountDev) <= 0) throw new Error('Contribution amount must be > 0 DEV');
 
   try {
     const contract = getContract(signer);
+    const value = ethers.parseEther(String(amountDev));
 
-    const tx = await contract.vote(proposalId, {
-      gasLimit: 1000000
+    const tx = await contract.contribute(projectId, { value, gasLimit: 200000 });
+    console.log('[web3.js] contribute tx sent:', tx.hash);
+
+    const { receipt, pending, txHash } = await waitForTx(tx, {
+      message: 'Contribution sent! It will appear after the next block.',
     });
 
-    console.log('[web3.js] Vote transaction sent:', tx.hash);
+    if (pending) return { success: true, pending: true, txHash };
 
-    // --- Receipt polling (separate try/catch) ---
-    // Moonbase Alpha's RPC can time out on eth_getTransactionReceipt even
-    // when the tx was accepted. Treat fetch/timeout as a pending success
-    // so the UI doesn't show a false "Failed" alert.
-    let receipt;
-    try {
-      receipt = await tx.wait();
-    } catch (waitError) {
-      const msg = waitError?.message?.toLowerCase() ?? '';
-      const isFetchError =
-        msg.includes('failed to fetch') ||
-        msg.includes('fetch failed') ||
-        msg.includes('network error') ||
-        msg.includes('etimedout') ||
-        waitError?.code === 'NETWORK_ERROR' ||
-        waitError?.code === 'TIMEOUT';
-
-      if (isFetchError) {
-        console.warn('[web3.js] tx.wait() timed out — vote was sent OK. TX:', tx.hash);
-        return {
-          success: true,
-          pending: true,
-          txHash: tx.hash,
-          message: 'Vote sent! It will appear after the next block.',
-        };
-      }
-      // On-chain revert or other hard error — surface it
-      throw waitError;
-    }
-
-    console.log('[web3.js] Vote confirmed:', receipt.hash);
-    return {
-      success: true,
-      pending: false,
-      txHash: receipt.hash,
-    };
+    console.log('[web3.js] contribute confirmed:', receipt.hash);
+    return { success: true, pending: false, txHash: receipt.hash };
   } catch (error) {
-    console.error('[web3.js] voteOnProposal error:', error);
-
-    if (error.code === 4001) {
-      throw new Error('Transaction rejected by user');
-    }
-    if (error.message?.includes('Already voted')) {
-      throw new Error('You have already voted on this proposal');
-    }
-    if (error.message?.includes('insufficient funds')) {
-      throw new Error('Insufficient funds for gas. Add DEV tokens to your wallet.');
-    }
-
-    throw error;
+    console.error('[web3.js] contributeToProject error:', error);
+    classifyError(error, 'contribute');
   }
 }
 
-export async function fetchAllProposals() {
-  console.log('========================================');
-  console.log('[web3.js] fetchAllProposals called');
-  console.log('[web3.js] Contract Address:', CONTRACT_ADDRESS);
-  console.log('[web3.js] Will try RPCs:', RPC_URLS);
-  console.log('========================================');
+// ─────────────────────────────────────────────────────────────────────────────
+// withdrawFunds
+// ─────────────────────────────────────────────────────────────────────────────
+export async function withdrawFunds(projectId, signer) {
+  console.log('[web3.js] withdrawFunds:', projectId);
+  if (!signer) throw new Error('Wallet not connected');
+
+  try {
+    const contract = getContract(signer);
+    const tx = await contract.withdrawFunds(projectId, { gasLimit: 200000 });
+    console.log('[web3.js] withdrawFunds tx sent:', tx.hash);
+
+    const { receipt, pending, txHash } = await waitForTx(tx, {
+      message: 'Withdrawal sent! Funds will arrive shortly.',
+    });
+
+    if (pending) return { success: true, pending: true, txHash };
+    console.log('[web3.js] withdrawFunds confirmed:', receipt.hash);
+    return { success: true, pending: false, txHash: receipt.hash };
+  } catch (error) {
+    console.error('[web3.js] withdrawFunds error:', error);
+    classifyError(error, 'withdraw funds');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// claimRefund
+// ─────────────────────────────────────────────────────────────────────────────
+export async function claimRefund(projectId, signer) {
+  console.log('[web3.js] claimRefund:', projectId);
+  if (!signer) throw new Error('Wallet not connected');
+
+  try {
+    const contract = getContract(signer);
+    const tx = await contract.claimRefund(projectId, { gasLimit: 200000 });
+    console.log('[web3.js] claimRefund tx sent:', tx.hash);
+
+    const { receipt, pending, txHash } = await waitForTx(tx, {
+      message: 'Refund sent! It will arrive shortly.',
+    });
+
+    if (pending) return { success: true, pending: true, txHash };
+    console.log('[web3.js] claimRefund confirmed:', receipt.hash);
+    return { success: true, pending: false, txHash: receipt.hash };
+  } catch (error) {
+    console.error('[web3.js] claimRefund error:', error);
+    classifyError(error, 'claim refund');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fetchAllProjects
+// ─────────────────────────────────────────────────────────────────────────────
+export async function fetchAllProjects() {
+  console.log('[web3.js] fetchAllProjects — contract:', CONTRACT_ADDRESS);
 
   let lastError;
-
-  // Try each RPC endpoint in sequence — return on the first that works.
   for (const rpcUrl of RPC_URLS) {
     try {
-      console.log('[web3.js] Trying RPC:', rpcUrl);
       const contract = createReadOnlyContract(rpcUrl);
-      const result = await contract.getAllProposals();
+      const result = await contract.getAllProjects();
 
-      const [ids, proposers, titles, descriptions, categories, voteCounts, timestamps, deadlines] = result;
+      const [
+        ids, creators, titles, descriptions, categories,
+        targetAmounts, raisedAmounts, timestamps, deadlines, withdrawnFlags
+      ] = result;
 
       if (!ids || ids.length === 0) {
-        console.log('[web3.js] Contract has 0 proposals — returning empty array.');
+        console.log('[web3.js] No projects found — empty array.');
         return [];
       }
 
-      console.log('[web3.js] Fetched', ids.length, 'proposals via', rpcUrl);
+      console.log('[web3.js] Fetched', ids.length, 'projects via', rpcUrl);
 
-      return ids.map((id, index) => ({
-        id: Number(id),
-        proposer: proposers[index],
-        title: titles[index],
-        description: descriptions[index],
-        category: categories[index] || 'Tech',
-        voteCount: Number(voteCounts[index]),
-        timestamp: Number(timestamps[index]) * 1000,
-        deadline: Number(deadlines[index]) * 1000, // convert to ms
-        hasVoted: false
-      }));
+      return ids.map((id, i) => {
+        const targetWei  = targetAmounts[i];
+        const raisedWei  = raisedAmounts[i];
+        const targetDev  = parseFloat(ethers.formatEther(targetWei));
+        const raisedDev  = parseFloat(ethers.formatEther(raisedWei));
+
+        return {
+          id:           Number(id),
+          creator:      creators[i],
+          title:        titles[i],
+          description:  descriptions[i],
+          category:     categories[i] || 'Tech',
+          targetAmount: targetDev,   // in DEV, float
+          raisedAmount: raisedDev,   // in DEV, float
+          targetWei:    targetWei,   // keep raw BigInt for contract calls
+          raisedWei:    raisedWei,
+          timestamp:    Number(timestamps[i]) * 1000, // ms
+          deadline:     Number(deadlines[i])  * 1000, // ms
+          withdrawn:    withdrawnFlags[i],
+        };
+      });
     } catch (err) {
       console.warn('[web3.js] RPC failed:', rpcUrl, '—', err.message);
       lastError = err;
-      // Continue to next RPC
     }
   }
 
-  // All RPCs failed — surface a clear error
-  console.error('========================================');
-  console.error('[web3.js] fetchAllProposals FAILED on all RPCs');
-  console.error('[web3.js] Contract Address:', CONTRACT_ADDRESS);
-  console.error('[web3.js] Last error:', lastError?.message);
-  console.error('========================================');
-
   const msg = lastError?.message?.toLowerCase() ?? '';
   if (msg.includes('bad address') || msg.includes('invalid address') || msg.includes('could not decode')) {
-    throw new Error(
-      `Invalid contract address (${CONTRACT_ADDRESS}). ` +
-      'Verify it on moonbase.moonscan.io and update CONTRACT_ADDRESS in utils/web3.js.'
-    );
+    throw new Error(`Invalid contract address (${CONTRACT_ADDRESS}). Verify on moonbase.moonscan.io`);
   }
-  // Only flag as network error on explicit fetch/timeout failures
-  if (msg.includes('failed to fetch') || msg.includes('fetch failed') || msg.includes('etimedout') || lastError?.code === 'TIMEOUT') {
-    throw new Error('Could not reach Moonbase Alpha. Check your internet connection and try again.');
+  if (msg.includes('failed to fetch') || msg.includes('fetch failed') || msg.includes('etimedout')) {
+    throw new Error('Could not reach Moonbase Alpha. Check your internet connection.');
   }
   throw lastError;
 }
 
-export async function checkVoted(proposalId, voterAddress) {
+// ─────────────────────────────────────────────────────────────────────────────
+// getContribution — reads how much a specific address contributed to a project
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getContribution(projectId, address) {
   for (const rpcUrl of RPC_URLS) {
     try {
       const contract = createReadOnlyContract(rpcUrl);
-      return await contract.checkVoted(proposalId, voterAddress);
+      const wei = await contract.contributions(projectId, address);
+      return parseFloat(ethers.formatEther(wei)); // DEV float
     } catch (err) {
-      console.warn('[web3.js] checkVoted RPC failed:', rpcUrl, '—', err.message);
+      console.warn('[web3.js] getContribution RPC failed:', rpcUrl, '—', err.message);
     }
   }
-  // All failed — default to false so the vote button still works
-  return false;
+  return 0;
 }
 
-export async function getProposalCount() {
+export async function getProjectCount() {
   try {
-    const contract = getReadOnlyContract();
-    const count = await contract.getProposalCount();
+    const count = await getReadOnlyContract().getProjectCount();
     return Number(count);
   } catch (error) {
-    console.error('[web3.js] getProposalCount error:', error);
+    console.error('[web3.js] getProjectCount error:', error);
     return 0;
   }
 }
 
-export async function getTotalVotes() {
-  try {
-    const contract = getReadOnlyContract();
-    const total = await contract.getTotalVotes();
-    return Number(total);
-  } catch (error) {
-    console.error('[web3.js] getTotalVotes error:', error);
-    return 0;
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Formatting helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-export function formatVoteCount(num) {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'k';
-  }
-  return num.toString();
+/** Format a DEV float for display: "1.23 DEV" */
+export function formatDEV(amount) {
+  if (typeof amount !== 'number' || isNaN(amount)) return '0 DEV';
+  if (amount === 0) return '0 DEV';
+  if (amount < 0.001) return '< 0.001 DEV';
+  return `${amount.toFixed(3).replace(/\.?0+$/, '')} DEV`;
 }
 
 export function formatRelativeTime(timestamp) {
-  const now = Date.now();
+  const now  = Date.now();
   const diff = now - timestamp;
-
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
+  const hours   = Math.floor(minutes / 60);
+  const days    = Math.floor(hours / 24);
+  if (days    > 0) return `${days}d ago`;
+  if (hours   > 0) return `${hours}h ago`;
   if (minutes > 0) return `${minutes}m ago`;
   return 'Just now';
 }

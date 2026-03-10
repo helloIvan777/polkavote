@@ -1,15 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { formatVoteCount, truncateAddress, checkVoted } from '../utils/web3';
+import { formatDEV, truncateAddress, getContribution } from '../utils/web3';
 import { useWeb3 } from '../context/Web3Context';
 import { CATEGORY_STYLES, CATEGORY_DOT, deadlineInfo } from './ProposalCard';
 
-/* ─── Inline SVG Icons ───────────────────────────────────────────────────── */
-const IconVotes = () => (
+/* ─── Icons ──────────────────────────────────────────────────────────────── */
+const IconFund  = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-    <path strokeLinecap="round" strokeLinejoin="round"
-      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 const IconClock = () => (
@@ -17,10 +16,15 @@ const IconClock = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
-const IconCalendar = () => (
+const IconTarget = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-    <path strokeLinecap="round" strokeLinejoin="round"
-      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+const Spinner = () => (
+  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
   </svg>
 );
 
@@ -45,17 +49,22 @@ function StatCard({ icon, label, value, accent = false }) {
   );
 }
 
-/* ─── Glowing Progress Bar ───────────────────────────────────────────────── */
-function GlowProgressBar({ voteCount, maxVotes = 1000 }) {
-  const pct = Math.min((voteCount / maxVotes) * 100, 100);
+/* ─── Glowing Funding Progress Bar ──────────────────────────────────────── */
+function GlowProgressBar({ raisedAmount, targetAmount }) {
+  const pct = targetAmount > 0 ? Math.min((raisedAmount / targetAmount) * 100, 100) : 0;
+  const isSuccess = pct >= 100;
   return (
     <div className="w-full bg-slate-700/50 rounded-full h-2.5 overflow-hidden">
       <div
         className="h-full rounded-full transition-all duration-700"
         style={{
           width: `${pct}%`,
-          background: 'linear-gradient(90deg, #E6007A, #a855f7)',
-          boxShadow: '0 0 10px rgba(230,0,122,0.6), 0 0 20px rgba(168,85,247,0.3)',
+          background: isSuccess
+            ? 'linear-gradient(90deg, #10b981, #34d399)'
+            : 'linear-gradient(90deg, #E6007A, #a855f7)',
+          boxShadow: isSuccess
+            ? '0 0 10px rgba(16,185,129,0.6)'
+            : '0 0 10px rgba(230,0,122,0.6), 0 0 20px rgba(168,85,247,0.3)',
         }}
       />
     </div>
@@ -65,26 +74,24 @@ function GlowProgressBar({ voteCount, maxVotes = 1000 }) {
 /* ─── Inline Toast ───────────────────────────────────────────────────────── */
 function Toast({ message, type = 'info', onDismiss }) {
   useEffect(() => {
-    const t = setTimeout(onDismiss, 4000);
+    const t = setTimeout(onDismiss, 5000);
     return () => clearTimeout(t);
   }, [onDismiss]);
 
   const colours = {
-    info:    'bg-slate-700 border-slate-600 text-slate-200',
+    info:    'bg-slate-700   border-slate-600  text-slate-200',
     success: 'bg-emerald-900/80 border-emerald-600/60 text-emerald-200',
     warning: 'bg-amber-900/80  border-amber-500/50  text-amber-200',
     error:   'bg-red-900/80    border-red-600/50    text-red-200',
   };
 
   return (
-    <div
-      className={`
-        absolute bottom-20 left-1/2 -translate-x-1/2
-        flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium
-        shadow-xl backdrop-blur-sm animate-fade-in z-10 whitespace-nowrap
-        ${colours[type] ?? colours.info}
-      `}
-    >
+    <div className={`
+      absolute bottom-20 left-1/2 -translate-x-1/2
+      flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium
+      shadow-xl backdrop-blur-sm animate-fade-in z-10 whitespace-nowrap
+      ${colours[type] ?? colours.info}
+    `}>
       {message}
       <button onClick={onDismiss} className="ml-1 opacity-60 hover:opacity-100 transition-opacity text-xs">✕</button>
     </div>
@@ -93,119 +100,95 @@ function Toast({ message, type = 'info', onDismiss }) {
 
 /* ─── Main Modal ─────────────────────────────────────────────────────────── */
 export default function ProposalDetailModal({
-  proposal, onClose, onVote, hasVoted: hasVotedProp, isVoting,
+  proposal, onClose, onContribute, onWithdraw, onRefund, isActing,
 }) {
-  const { account, isConnected } = useWeb3();
+  const { account, isConnected, getSigner } = useWeb3();
 
-  // ── Local vote state ──────────────────────────────────────────────────────
-  // Seeds from parent prop; re-verified on-open via checkVoted.
-  const [hasAlreadyVoted, setHasAlreadyVoted] = useState(hasVotedProp ?? false);
-  const [isCheckingVote, setIsCheckingVote] = useState(false); // on-open background check
-  const [isVerifying, setIsVerifying]         = useState(false); // in-flight pre-guard check
+  const [contributionAmount, setContributionAmount] = useState('');
+  const [userContribution, setUserContribution]     = useState(0);   // DEV, float
+  const [isLoadingContrib, setIsLoadingContrib]     = useState(false);
+  const [toast, setToast] = useState(null);
 
-  // ── Toast state ───────────────────────────────────────────────────────────
-  const [toast, setToast] = useState(null); // { message, type }
-  const showToast = useCallback((message, type = 'info') => {
-    setToast({ message, type });
-  }, []);
+  const showToast  = useCallback((message, type = 'info') => setToast({ message, type }), []);
   const dismissToast = useCallback(() => setToast(null), []);
 
-  // ── On-open vote check ────────────────────────────────────────────────────
-  // Runs whenever this modal mounts (i.e. a proposal is selected) and the
-  // wallet is connected. This catches cases where the prop is stale.
+  // Load the connected user's existing contribution for this project
   useEffect(() => {
-    if (!proposal?.id || !isConnected || !account) {
-      // No wallet — just trust the prop
-      setHasAlreadyVoted(hasVotedProp ?? false);
-      return;
-    }
+    if (!proposal?.id || !account) { setUserContribution(0); return; }
 
     let cancelled = false;
-    setIsCheckingVote(true);
-
-    checkVoted(proposal.id, account)
-      .then((voted) => {
-        if (!cancelled) setHasAlreadyVoted(voted);
-      })
-      .catch((err) => {
-        // Non-fatal: fall back to the prop value
-        console.warn('[ProposalDetailModal] checkVoted failed (non-fatal):', err.message);
-        if (!cancelled) setHasAlreadyVoted(hasVotedProp ?? false);
-      })
-      .finally(() => {
-        if (!cancelled) setIsCheckingVote(false);
-      });
+    setIsLoadingContrib(true);
+    getContribution(proposal.id, account)
+      .then((amt) => { if (!cancelled) setUserContribution(amt); })
+      .catch(() => { if (!cancelled) setUserContribution(0); })
+      .finally(() => { if (!cancelled) setIsLoadingContrib(false); });
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proposal?.id, account, isConnected]);
+  }, [proposal?.id, account]);
 
-  // ── Sync prop changes (e.g. parent optimistic update) ────────────────────
-  useEffect(() => {
-    if (hasVotedProp) setHasAlreadyVoted(true);
-  }, [hasVotedProp]);
-
-  // ── Vote handler (wraps parent's onVote) ──────────────────────────────────
-  // NOTE: index.js's handleVote never re-throws (to avoid crashing ProposalCard's
-  // fire-and-forget call). So we can't rely on catching an error here.
-  // Instead, we check the on-chain state after the call to determine outcome.
-  const handleVote = useCallback(async () => {
-    if (!onVote || hasAlreadyVoted || isVoting || isVerifying) return;
-
-    // Pre-guard: double-check on-chain BEFORE opening MetaMask (catches stale props)
-    if (isConnected && account) {
-      setIsVerifying(true);
-      let alreadyOnChain = false;
-      try {
-        alreadyOnChain = await checkVoted(proposal.id, account);
-      } catch (err) {
-        console.warn('[ProposalDetailModal] pre-guard checkVoted failed, proceeding:', err.message);
-      } finally {
-        setIsVerifying(false);
-      }
-      if (alreadyOnChain) {
-        setHasAlreadyVoted(true);
-        showToast('✓ You have already voted on this proposal.', 'warning');
-        return;
-      }
-    }
-
-    // Check passed — fire the vote (index.js owns the tx + optimistic UI update)
-    await onVote(proposal.id);
-
-    // Post-verify: read on-chain state to confirm outcome
-    if (isConnected && account) {
-      const votedNow = await checkVoted(proposal.id, account).catch(() => null);
-      if (votedNow === true) {
-        setHasAlreadyVoted(true);
-      } else if (votedNow === false) {
-        showToast('⚠ Vote failed. The deadline may have passed.', 'error');
-      }
-    } else {
-      setHasAlreadyVoted(true);
-    }
-  }, [onVote, hasAlreadyVoted, isVoting, isVerifying, isConnected, account, proposal?.id, showToast]);
-
-  // ── Guard ─────────────────────────────────────────────────────────────────
   if (!proposal) return null;
 
-  const cat            = proposal.category || 'Tech';
-  const catStyle       = CATEGORY_STYLES[cat] || CATEGORY_STYLES.Tech;
-  const dotStyle       = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
-  const dl             = deadlineInfo(proposal.deadline);
-  const formattedVotes = formatVoteCount(proposal.voteCount);
-  const moonscanUrl    = `https://moonbase.moonscan.io/address/${proposal.proposer}`;
-  const pct            = Math.min((proposal.voteCount / 1000) * 100, 100).toFixed(1);
+  const cat        = proposal.category || 'Tech';
+  const catStyle   = CATEGORY_STYLES[cat] || CATEGORY_STYLES.Tech;
+  const dotStyle   = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
+  const dl         = deadlineInfo(proposal.deadline, proposal.raisedAmount, proposal.targetAmount);
+  const isExpired  = dl.status === 'success' || dl.status === 'failed';
+  const pct        = proposal.targetAmount > 0
+    ? Math.min((proposal.raisedAmount / proposal.targetAmount) * 100, 100).toFixed(1)
+    : '0.0';
+
+  const moonscanUrl = `https://moonbase.moonscan.io/address/${proposal.creator}`;
 
   const deadlineDate = proposal.deadline
     ? new Date(proposal.deadline).toLocaleString('en-GB', {
-        day: 'numeric', month: 'short',
-        hour: '2-digit', minute: '2-digit',
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
       })
     : '—';
 
-  // Consolidated disabled logic
-  const isDisabled = hasAlreadyVoted || isVoting || isCheckingVote || isVerifying || dl.expired;
+  // ── Button visibility logic ──────────────────────────────────────────────
+  const isCreator = account && proposal.creator &&
+    account.toLowerCase() === proposal.creator.toLowerCase();
+
+  const canContribute  = !isExpired && isConnected;
+  const canWithdraw    = isExpired && isCreator &&
+    proposal.raisedAmount >= proposal.targetAmount && !proposal.withdrawn;
+  const canRefund      = isExpired && !isCreator &&
+    proposal.raisedAmount < proposal.targetAmount && userContribution > 0;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const handleContribute = async () => {
+    const amt = parseFloat(contributionAmount);
+    if (!contributionAmount || isNaN(amt) || amt <= 0) {
+      showToast('Please enter a valid DEV amount.', 'warning');
+      return;
+    }
+    if (!isConnected) {
+      showToast('Please connect your wallet first.', 'warning');
+      return;
+    }
+    try {
+      await onContribute(proposal.id, contributionAmount);
+      setContributionAmount('');
+    } catch (err) {
+      showToast(err.message || 'Contribution failed.', 'error');
+    }
+  };
+
+  const handleWithdraw = async () => {
+    try {
+      await onWithdraw(proposal.id);
+    } catch (err) {
+      showToast(err.message || 'Withdrawal failed.', 'error');
+    }
+  };
+
+  const handleRefund = async () => {
+    try {
+      await onRefund(proposal.id);
+    } catch (err) {
+      showToast(err.message || 'Refund claim failed.', 'error');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -230,12 +213,12 @@ export default function ProposalDetailModal({
               {cat}
             </span>
             {dl.label && (
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border
-                ${dl.expired
-                  ? 'bg-slate-700/80 text-slate-400 border-slate-600'
-                  : 'bg-amber-500/10 text-amber-300 border-amber-500/25'
-                }`}>
-                {dl.expired ? '🔒 ' : '⏱ '}{dl.label}
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                dl.status === 'success' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' :
+                dl.status === 'failed'  ? 'bg-red-500/15 text-red-400 border-red-500/30' :
+                'bg-amber-500/10 text-amber-300 border-amber-500/25'
+              }`}>
+                {dl.label}
               </span>
             )}
           </div>
@@ -252,15 +235,14 @@ export default function ProposalDetailModal({
 
         {/* ── Scrollable Body ── */}
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
-
           {/* Title */}
           <h2 className="text-2xl font-extrabold text-white leading-tight tracking-tight">
             {proposal.title}
           </h2>
 
-          {/* Proposer */}
+          {/* Creator */}
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 text-sm">Proposed by</span>
+            <span className="text-slate-500 text-sm">Created by</span>
             <a
               href={moonscanUrl}
               target="_blank"
@@ -268,17 +250,23 @@ export default function ProposalDetailModal({
               className="inline-flex items-center gap-1 text-pink-400 hover:text-pink-300
                 font-mono text-sm transition-colors underline underline-offset-2"
             >
-              {truncateAddress(proposal.proposer, 6, 4)}
+              {truncateAddress(proposal.creator, 6, 4)}
               <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
               </svg>
             </a>
+            {isCreator && (
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5
+                rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                You
+              </span>
+            )}
           </div>
 
           <div className="border-t border-slate-700/50" />
 
-          {/* Full description */}
+          {/* Description */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
               Description
@@ -293,31 +281,86 @@ export default function ProposalDetailModal({
             </div>
           </div>
 
-          {/* ── Glassmorphism Stats Row ── */}
+          {/* ── Stats Row ── */}
           <div className="flex flex-wrap gap-3">
-            <StatCard icon={<IconVotes />} label="Votes" value={formattedVotes} accent />
-            <StatCard icon={<IconClock />} label="Time Left" value={dl.expired ? 'Closed' : (dl.label || '—')} />
-            <StatCard icon={<IconCalendar />} label="Expiration" value={deadlineDate} />
+            <StatCard icon={<IconFund />}   label="Raised"    value={formatDEV(proposal.raisedAmount)} accent />
+            <StatCard icon={<IconTarget />} label="Goal"      value={formatDEV(proposal.targetAmount)} />
+            <StatCard icon={<IconClock />}  label="Time Left" value={isExpired ? (dl.status === 'success' ? 'Funded!' : 'Expired') : (dl.label || '—')} />
           </div>
 
-          {/* ── Glowing Progress Bar ── */}
+          {/* ── Funding Progress Bar ── */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Vote Progress
+                Funding Progress
               </p>
               <span className="text-xs font-mono font-semibold text-slate-400">{pct}%</span>
             </div>
-            <GlowProgressBar voteCount={proposal.voteCount} />
+            <GlowProgressBar raisedAmount={proposal.raisedAmount} targetAmount={proposal.targetAmount} />
+            <p className="text-xs text-slate-500 text-right">
+              Deadline: {deadlineDate}
+            </p>
           </div>
+
+          {/* User's existing contribution */}
+          {isConnected && !isCreator && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-500">Your contribution:</span>
+              {isLoadingContrib ? (
+                <span className="text-slate-400 flex items-center gap-1"><Spinner /> Loading…</span>
+              ) : (
+                <span className={`font-semibold ${userContribution > 0 ? 'text-pink-400' : 'text-slate-400'}`}>
+                  {userContribution > 0 ? formatDEV(userContribution) : 'None yet'}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* ── Contribution Input (only if campaign is active) ── */}
+          {canContribute && (
+            <div className="rounded-xl border border-white/10 p-4 space-y-3"
+              style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                Back this project
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    placeholder="0.00"
+                    value={contributionAmount}
+                    onChange={(e) => setContributionAmount(e.target.value)}
+                    className="w-full pl-4 pr-14 py-2.5 bg-slate-900 border border-slate-700
+                      rounded-xl text-white placeholder-slate-600
+                      focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500
+                      transition-all duration-200 text-sm"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    DEV
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  {['0.01', '0.1', '1'].map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => setContributionAmount(preset)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300
+                        hover:bg-slate-600 text-xs font-medium transition-colors"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Footer ── */}
         <div className="relative px-6 py-4 border-t border-slate-700/50 flex gap-3 shrink-0">
-          {/* Toast lives inside the panel so it doesn't escape the modal */}
-          {toast && (
-            <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
-          )}
+          {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
 
           <button
             onClick={onClose}
@@ -327,63 +370,58 @@ export default function ProposalDetailModal({
             Close
           </button>
 
-          <button
-            onClick={handleVote}
-            disabled={isDisabled}
-            className={`
-              flex-1 px-4 py-3 rounded-xl font-semibold text-sm
-              flex items-center justify-center gap-2 transition-all duration-200
-              ${dl.expired
-                ? 'bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600'
-                : hasAlreadyVoted
-                  ? 'bg-slate-700/80 text-slate-400 cursor-not-allowed border border-slate-600/50'
-                  : isCheckingVote
-                    ? 'bg-slate-700/60 text-slate-500 cursor-wait'
-                    : 'text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95'
-              }
-              ${isVoting ? 'opacity-70 cursor-wait' : ''}
-            `}
-            style={!dl.expired && !hasAlreadyVoted && !isCheckingVote && !isVerifying ? {
-              background: 'linear-gradient(135deg, #E6007A, #a855f7)',
-            } : undefined}
-          >
-            {isVoting ? (
-              <>
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                </svg>
-                Voting…
-              </>
-            ) : isVerifying ? (
-              <>
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                </svg>
-                Verifying…
-              </>
-            ) : isCheckingVote ? (
-              <>
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                </svg>
-                Checking…
-              </>
-            ) : dl.expired ? (
-              '🔒 Voting Closed'
-            ) : hasAlreadyVoted ? (
-              '✓ Already Voted'
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-                </svg>
-                Vote Now
-              </>
-            )}
-          </button>
+          {/* Back this Project */}
+          {canContribute && (
+            <button
+              onClick={handleContribute}
+              disabled={isActing}
+              className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                flex items-center justify-center gap-2 transition-all duration-200
+                text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95
+                disabled:opacity-60 disabled:cursor-wait"
+              style={{ background: 'linear-gradient(135deg, #E6007A, #a855f7)' }}
+            >
+              {isActing ? <><Spinner /> Processing…</> : '💜 Back this Project'}
+            </button>
+          )}
+
+          {/* Withdraw Funds (creator, goal met, deadline passed) */}
+          {canWithdraw && (
+            <button
+              onClick={handleWithdraw}
+              disabled={isActing}
+              className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                flex items-center justify-center gap-2 transition-all duration-200
+                bg-emerald-600 hover:bg-emerald-500 text-white
+                hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95
+                disabled:opacity-60 disabled:cursor-wait"
+            >
+              {isActing ? <><Spinner /> Processing…</> : '🏦 Withdraw Funds'}
+            </button>
+          )}
+
+          {/* Claim Refund (backer, goal not met, deadline passed) */}
+          {canRefund && (
+            <button
+              onClick={handleRefund}
+              disabled={isActing}
+              className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+                flex items-center justify-center gap-2 transition-all duration-200
+                bg-amber-600 hover:bg-amber-500 text-white
+                hover:shadow-lg hover:shadow-amber-500/30 active:scale-95
+                disabled:opacity-60 disabled:cursor-wait"
+            >
+              {isActing ? <><Spinner /> Processing…</> : '↩ Claim Refund'}
+            </button>
+          )}
+
+          {/* Expired, no action available */}
+          {isExpired && !canWithdraw && !canRefund && (
+            <button disabled className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
+              bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600">
+              {dl.status === 'success' ? '🎉 Campaign Successful' : '✕ Campaign Ended'}
+            </button>
+          )}
         </div>
       </div>
     </div>

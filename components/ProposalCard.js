@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { formatVoteCount, formatRelativeTime, truncateAddress } from '../utils/web3';
+import { formatDEV, formatRelativeTime, truncateAddress } from '../utils/web3';
 
 export const CATEGORY_STYLES = {
   Tech:      'bg-blue-500/20  text-blue-300  border-blue-500/30',
@@ -17,16 +17,27 @@ export const CATEGORY_DOT = {
   Community: 'bg-purple-400',
 };
 
-/** Returns { label, expired } from a deadline ms timestamp. */
-export function deadlineInfo(deadlineMs) {
-  if (!deadlineMs) return { label: '', expired: false };
+/**
+ * Returns deadline / funding status info for a project.
+ * status: 'active' | 'success' | 'failed' | 'closing'
+ */
+export function deadlineInfo(deadlineMs, raisedAmount, targetAmount) {
+  if (!deadlineMs) return { label: '', status: 'active' };
   const diff = deadlineMs - Date.now();
-  if (diff <= 0) return { label: 'Voting Closed', expired: true };
+
+  if (diff <= 0) {
+    // Deadline passed — determine outcome
+    if (raisedAmount >= targetAmount) {
+      return { label: 'Funded! 🎉', status: 'success' };
+    }
+    return { label: 'Funding Failed', status: 'failed' };
+  }
+
   const days  = Math.floor(diff / 86_400_000);
   const hours = Math.floor((diff % 86_400_000) / 3_600_000);
-  if (days >= 1) return { label: `${days}d ${hours}h left`, expired: false };
-  if (hours >= 1) return { label: `${hours}h left`, expired: false };
-  return { label: 'Closes soon', expired: false };
+  if (days  >= 1) return { label: `${days}d ${hours}h left`, status: 'active' };
+  if (hours >= 1) return { label: `${hours}h left`,          status: 'closing' };
+  return { label: 'Closes soon', status: 'closing' };
 }
 
 function UserAvatar({ address, size = 'w-10 h-10' }) {
@@ -46,33 +57,57 @@ function UserAvatar({ address, size = 'w-10 h-10' }) {
   );
 }
 
-function VoteProgressBar({ voteCount, maxVotes = 1000 }) {
-  const pct = Math.min((voteCount / maxVotes) * 100, 100);
+function FundingProgressBar({ raisedAmount, targetAmount }) {
+  const pct = targetAmount > 0
+    ? Math.min((raisedAmount / targetAmount) * 100, 100)
+    : 0;
+  const isSuccess = pct >= 100;
   return (
     <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
       <div
-        className="bg-gradient-to-r from-pink-500 to-pink-600 h-full rounded-full transition-all duration-700"
+        className={`h-full rounded-full transition-all duration-700 ${
+          isSuccess
+            ? 'bg-gradient-to-r from-emerald-500 to-green-400'
+            : 'bg-gradient-to-r from-pink-500 to-pink-600'
+        }`}
         style={{ width: `${pct}%` }}
       />
     </div>
   );
 }
 
-export default function ProposalCard({ proposal, onVote, onCardClick, hasVoted, isVoting }) {
+export default function ProposalCard({ proposal, onContribute, onCardClick }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const formattedVotes = formatVoteCount(proposal.voteCount);
-  const relativeTime   = formatRelativeTime(proposal.timestamp);
-  const shortAddress   = truncateAddress(proposal.proposer, 4, 4);
-  const cat            = proposal.category || 'Tech';
-  const catStyle       = CATEGORY_STYLES[cat] || CATEGORY_STYLES.Tech;
-  const dotStyle       = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
-  const dl             = deadlineInfo(proposal.deadline);
-  const isDisabled     = hasVoted || isVoting || dl.expired;
+  const relativeTime = formatRelativeTime(proposal.timestamp);
+  const shortAddress = truncateAddress(proposal.creator, 4, 4);
+  const cat          = proposal.category || 'Tech';
+  const catStyle     = CATEGORY_STYLES[cat] || CATEGORY_STYLES.Tech;
+  const dotStyle     = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
+  const dl           = deadlineInfo(proposal.deadline, proposal.raisedAmount, proposal.targetAmount);
+  const isExpired    = dl.status === 'success' || dl.status === 'failed';
 
   const truncatedDesc = proposal.description.length > 100
     ? proposal.description.slice(0, 100) + '…'
     : proposal.description;
+
+  // Status badge styles
+  const statusBadgeStyle = {
+    success: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    failed:  'bg-red-500/15     text-red-400     border-red-500/30',
+    closing: 'bg-amber-500/15   text-amber-300   border-amber-500/30',
+    active:  'bg-amber-500/15   text-amber-300   border-amber-500/30',
+  }[dl.status] ?? 'bg-slate-700/60 text-slate-400 border-slate-600';
+
+  // CTA button appearance
+  const btnLabel = {
+    success: '🎉 Fully Funded',
+    failed:  '✕ Goal Not Met',
+    closing: '⚡ BACK PROJECT',
+    active:  '💜 BACK PROJECT',
+  }[dl.status] ?? '💜 BACK PROJECT';
+
+  const canContribute = !isExpired;
 
   return (
     <article
@@ -94,10 +129,10 @@ export default function ProposalCard({ proposal, onVote, onCardClick, hasVoted, 
     >
       {/* ── Card Body ── */}
       <div className="flex flex-col flex-1 p-5">
-        {/* Header: avatar + meta + deadline badge */}
+        {/* Header: avatar + meta + status badge */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <UserAvatar address={proposal.proposer} />
+            <UserAvatar address={proposal.creator} />
             <div className="min-w-0">
               <p className="text-white font-medium truncate text-sm">@{shortAddress}</p>
               <p className="text-slate-400 text-xs">{relativeTime}</p>
@@ -105,12 +140,8 @@ export default function ProposalCard({ proposal, onVote, onCardClick, hasVoted, 
           </div>
 
           {dl.label && (
-            <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border
-              ${dl.expired
-                ? 'bg-slate-700 text-slate-400 border-slate-600'
-                : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-              }`}>
-              {dl.expired ? '🔒 ' : '⏱ '}{dl.label}
+            <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusBadgeStyle}`}>
+              {dl.label}
             </span>
           )}
         </div>
@@ -128,74 +159,55 @@ export default function ProposalCard({ proposal, onVote, onCardClick, hasVoted, 
           </span>
         </div>
 
-        {/* Description — fills remaining space */}
+        {/* Description */}
         <p className="text-slate-400 text-sm leading-relaxed line-clamp-3 flex-1">
           {truncatedDesc}
         </p>
       </div>
 
-      {/* ── Card Footer (always at bottom) ── */}
+      {/* ── Card Footer ── */}
       <div className="px-5 pb-5 pt-1 space-y-3 mt-auto">
-        {/* Vote progress */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <VoteProgressBar voteCount={proposal.voteCount} />
+        {/* Funding progress */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-400">
+              Raised: <span className="text-white font-semibold">{formatDEV(proposal.raisedAmount)}</span>
+            </span>
+            <span className="text-slate-500">
+              Goal: {formatDEV(proposal.targetAmount)}
+            </span>
           </div>
-          <span className={`text-xs font-bold ${hasVoted ? 'text-pink-400' : 'text-pink-500'}`}>
-            {formattedVotes} votes
-          </span>
+          <FundingProgressBar
+            raisedAmount={proposal.raisedAmount}
+            targetAmount={proposal.targetAmount}
+          />
+          <p className="text-right text-[10px] text-slate-500">
+            {proposal.targetAmount > 0
+              ? `${Math.min(((proposal.raisedAmount / proposal.targetAmount) * 100), 100).toFixed(1)}% funded`
+              : '0% funded'}
+          </p>
         </div>
 
-        {/* Vote button — stops propagation so card click doesn't fire too */}
+        {/* CTA button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (!isDisabled && onVote) onVote(proposal.id);
+            if (canContribute && onContribute) onContribute(proposal.id);
+            else if (!isExpired) onCardClick && onCardClick(proposal);
           }}
-          disabled={isDisabled}
+          disabled={isExpired}
           className={`
             w-full py-2.5 px-4 rounded-xl font-semibold text-sm
             transition-all duration-200 flex items-center justify-center gap-2
-            ${dl.expired
-              ? 'bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600'
-              : hasVoted
-                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-pink-500 to-pink-600 text-white hover:from-pink-600 hover:to-pink-700 hover:shadow-md hover:shadow-pink-500/30 active:scale-95'
+            ${dl.status === 'success'
+              ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-600/30 cursor-default'
+              : dl.status === 'failed'
+              ? 'bg-slate-700/60 text-slate-500 border border-slate-600 cursor-default'
+              : 'bg-gradient-to-r from-pink-500 to-pink-600 text-white hover:from-pink-600 hover:to-pink-700 hover:shadow-md hover:shadow-pink-500/30 active:scale-95'
             }
-            ${isVoting ? 'opacity-70 cursor-wait' : ''}
           `}
         >
-          {isVoting ? (
-            <>
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-              </svg>
-              VOTING…
-            </>
-          ) : dl.expired ? (
-            <>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-              </svg>
-              VOTING CLOSED
-            </>
-          ) : hasVoted ? (
-            <>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
-              </svg>
-              VOTED
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-              </svg>
-              VOTE NOW
-            </>
-          )}
+          {btnLabel}
         </button>
       </div>
     </article>
