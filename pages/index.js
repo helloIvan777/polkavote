@@ -179,6 +179,9 @@ export default function HomePage() {
           setTimeout(() => loadProjects(), 6000);
         }
       }
+
+      // Return result for modal to access txHash
+      return result;
     } catch (err) {
       console.error('[HomePage] contribute error:', err);
       // Surface to ProposalDetailModal via re-throw so its toast shows it

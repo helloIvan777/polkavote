@@ -115,6 +115,7 @@ export default function ProposalDetailModal({
   const [isLoadingContrib, setIsLoadingContrib]     = useState(false);
   const [isContributing, setIsContributing]         = useState(false);
   const [isSuccess, setIsSuccess]                   = useState(false);
+  const [txHash, setTxHash]                         = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast  = useCallback((message, type = 'info') => setToast({ message, type }), []);
@@ -208,16 +209,12 @@ export default function ProposalDetailModal({
 
     try {
       setIsContributing(true);
-      await onContribute(proposal.id, contributionAmount);
-      
+      const result = await onContribute(proposal.id, contributionAmount);
+
       // Success! Show success state
       setContributionAmount('');
+      setTxHash(result?.txHash || null);
       setIsSuccess(true);
-      
-      // Auto-close modal after 4 seconds
-      setTimeout(() => {
-        onClose();
-      }, 4000);
     } catch (err) {
       // Handle user rejection or failure
       if (err.code === 4001 || err.message?.includes('rejected')) {
@@ -228,6 +225,12 @@ export default function ProposalDetailModal({
     } finally {
       setIsContributing(false);
     }
+  };
+
+  const handleSuccessClose = () => {
+    setIsSuccess(false);
+    setTxHash(null);
+    onClose();
   };
 
   const handleWithdraw = async () => {
@@ -417,22 +420,36 @@ export default function ProposalDetailModal({
 
           {/* ── Success State ── */}
           {isSuccess && (
-            <div className="rounded-xl border border-emerald-500/30 p-6 text-center space-y-4"
-              style={{ background: 'rgba(16,185,129,0.1)' }}>
+            <div className="rounded-xl border border-emerald-500/30 p-8 text-center space-y-5"
+              style={{ background: 'rgba(16,185,129,0.08)' }}>
               {/* Animated Checkmark Icon */}
-              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center animate-bounce">
-                <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <div className="mx-auto w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500/30 to-green-500/30 flex items-center justify-center animate-bounce">
+                <svg className="w-10 h-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-bold text-emerald-400 mb-1">
-                  Transaction Confirmed!
+                <h3 className="text-xl font-bold text-emerald-400 mb-2">
+                  🎉 Contribution Successful!
                 </h3>
-                <p className="text-slate-300 text-sm">
-                  Thank you for your support. Closing soon...
+                <p className="text-slate-300 text-sm leading-relaxed">
+                  Your DEV has been sent to the project. You are now officially a backer.
                 </p>
               </div>
+              {/* View on Explorer link */}
+              {txHash && (
+                <a
+                  href={`https://moonbase.moonscan.io/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-pink-400 hover:text-pink-300 transition-colors underline underline-offset-2"
+                >
+                  View on Explorer
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -441,14 +458,16 @@ export default function ProposalDetailModal({
         <div className="relative px-6 py-4 border-t border-slate-700/50 flex gap-3 shrink-0">
           {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
 
-          {/* Success State - Single Close Button */}
+          {/* Success State - Single "Great!" Button */}
           {isSuccess ? (
             <button
-              onClick={onClose}
-              className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm
-                transition-all duration-200"
+              onClick={handleSuccessClose}
+              className="flex-1 px-4 py-3.5 rounded-xl font-semibold text-sm
+                transition-all duration-200 text-white
+                hover:shadow-lg hover:shadow-pink-500/30 active:scale-95"
+              style={{ background: 'linear-gradient(135deg, #E6007A, #a855f7)' }}
             >
-              Close
+              Great!
             </button>
           ) : (
             <>
