@@ -85,17 +85,22 @@ function EmptyState({ onAddIdea }) {
 /**
  * Main Home Page Component
  */
+const PROPOSALS_PER_PAGE = 9;
+
 export default function HomePage() {
   const { account, isConnected, connectWallet, getSigner } = useWeb3();
 
   const [proposals, setProposals] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedProposal, setSelectedProposal] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [votingStates, setVotingStates] = useState({});
   const [stats, setStats] = useState({ proposalCount: 0, totalVotes: 0 });
   const [error, setError] = useState(null);
+
+  const proposalsSectionRef = React.useRef(null);
 
   // Derive filtered list — no extra fetch needed
   const FILTER_TABS = ['All', 'Tech', 'Marketing', 'Ecosystem', 'Community'];
@@ -109,6 +114,22 @@ export default function HomePage() {
   const filteredProposals = activeCategory === 'All'
     ? proposals
     : proposals.filter(p => p.category === activeCategory);
+
+  // Pagination slicing
+  const totalPages = Math.max(1, Math.ceil(filteredProposals.length / PROPOSALS_PER_PAGE));
+  const indexOfLastItem = currentPage * PROPOSALS_PER_PAGE;
+  const indexOfFirstItem = indexOfLastItem - PROPOSALS_PER_PAGE;
+  const currentProposals = filteredProposals.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    proposalsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleCategoryChange = (tab) => {
+    setActiveCategory(tab);
+    setCurrentPage(1);
+  };
 
   // Track latest account in a ref (for loadProposals)
   const accountRef = React.useRef(account);
@@ -243,13 +264,22 @@ export default function HomePage() {
       }
     } catch (err) {
       console.error('[HomePage] Vote error:', err);
-      if (err.message?.includes('Already voted')) {
-        alert('You have already voted on this proposal.');
-      } else if (err.message?.includes('rejected')) {
-        // User rejected in wallet — no alert needed, just log
+      // NOTE: Do NOT re-throw here. ProposalCard calls onVote() as
+      // fire-and-forget (no await/catch), so any throw becomes an
+      // unhandled promise rejection and crashes the app with a red overlay.
+      // The ProposalDetailModal wraps onVote() in its own try/catch and
+      // handles all user-facing error display via its inline toast.
+      if (err.message?.includes('rejected')) {
         console.log('[HomePage] User rejected vote transaction');
+      } else if (
+        err.message?.toLowerCase().includes('already voted') ||
+        err.message?.toLowerCase().includes('execution reverted')
+      ) {
+        // Expected contract revert — non-fatal, modal handles UI feedback.
+        console.warn('[HomePage] Vote reverted (already voted or deadline):', err.message);
       } else {
-        alert(`Vote failed: ${err.message || 'Unknown error. Please try again.'}`);
+        // Unexpected error — log it but keep the app stable.
+        console.warn('[HomePage] Unexpected vote error (non-fatal):', err.message);
       }
     } finally {
       setVotingStates(prev => ({ ...prev, [proposalId]: false }));
@@ -272,7 +302,7 @@ export default function HomePage() {
   return (
     <Layout>
       {/* Header Section */}
-      <section className="px-4 py-6 lg:py-8 border-b border-slate-700/50">
+      <section ref={proposalsSectionRef} className="px-4 py-6 lg:py-8 border-b border-slate-700/50">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             {/* Left Side - Title & Stats */}
@@ -332,7 +362,7 @@ export default function HomePage() {
             {FILTER_TABS.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveCategory(tab)}
+                onClick={() => handleCategoryChange(tab)}
                 className={`
                   px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
                   ${activeCategory === tab
@@ -376,18 +406,68 @@ export default function HomePage() {
               </div>
             )
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-              {filteredProposals.map((proposal) => (
-                <ProposalCard
-                  key={proposal.id}
-                  proposal={proposal}
-                  onVote={handleVote}
-                  onCardClick={setSelectedProposal}
-                  hasVoted={proposal.hasVoted}
-                  isVoting={votingStates[proposal.id]}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+                {currentProposals.map((proposal) => (
+                  <ProposalCard
+                    key={proposal.id}
+                    proposal={proposal}
+                    onVote={handleVote}
+                    onCardClick={setSelectedProposal}
+                    hasVoted={proposal.hasVoted}
+                    isVoting={votingStates[proposal.id]}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination Bar */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-10">
+                  {/* Previous */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
+                      bg-slate-800/60 border border-slate-700/60 text-slate-300
+                      hover:border-pink-500/50 hover:text-white
+                      disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-700/60 disabled:hover:text-slate-300
+                      backdrop-blur-sm"
+                  >
+                    ← Prev
+                  </button>
+
+                  {/* Page Numbers */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all duration-200
+                        ${
+                          page === currentPage
+                            ? 'bg-[#E6007A] text-white shadow-lg shadow-pink-500/30 scale-105'
+                            : 'bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:border-pink-500/50 hover:text-white backdrop-blur-sm'
+                        }
+                      `}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                  {/* Next */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
+                      bg-slate-800/60 border border-slate-700/60 text-slate-300
+                      hover:border-pink-500/50 hover:text-white
+                      disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-700/60 disabled:hover:text-slate-300
+                      backdrop-blur-sm"
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>

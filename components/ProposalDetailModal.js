@@ -1,5 +1,8 @@
-import React from 'react';
-import { formatVoteCount, truncateAddress } from '../utils/web3';
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { formatVoteCount, truncateAddress, checkVoted } from '../utils/web3';
+import { useWeb3 } from '../context/Web3Context';
 import { CATEGORY_STYLES, CATEGORY_DOT, deadlineInfo } from './ProposalCard';
 
 /* ─── Inline SVG Icons ───────────────────────────────────────────────────── */
@@ -25,14 +28,17 @@ const IconCalendar = () => (
 function StatCard({ icon, label, value, accent = false }) {
   return (
     <div
-      className="flex-1 flex flex-col gap-2 rounded-2xl p-4 border border-white/10 backdrop-blur-md"
+      className="flex-1 min-w-0 flex flex-col gap-2 rounded-2xl p-4 border border-white/10 backdrop-blur-md"
       style={{ background: 'rgba(255,255,255,0.05)' }}
     >
-      <div className="flex items-center gap-1.5 text-slate-400">
+      <div className="flex items-center gap-1.5 text-slate-400 whitespace-nowrap">
         {icon}
         <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
       </div>
-      <p className={`text-xl font-extrabold leading-tight ${accent ? 'text-pink-400' : 'text-white'}`}>
+      <p
+        className={`text-lg font-extrabold leading-tight truncate ${accent ? 'text-pink-400' : 'text-white'}`}
+        title={typeof value === 'string' ? value : undefined}
+      >
         {value}
       </p>
     </div>
@@ -56,17 +62,134 @@ function GlowProgressBar({ voteCount, maxVotes = 1000 }) {
   );
 }
 
+/* ─── Inline Toast ───────────────────────────────────────────────────────── */
+function Toast({ message, type = 'info', onDismiss }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 4000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  const colours = {
+    info:    'bg-slate-700 border-slate-600 text-slate-200',
+    success: 'bg-emerald-900/80 border-emerald-600/60 text-emerald-200',
+    warning: 'bg-amber-900/80  border-amber-500/50  text-amber-200',
+    error:   'bg-red-900/80    border-red-600/50    text-red-200',
+  };
+
+  return (
+    <div
+      className={`
+        absolute bottom-20 left-1/2 -translate-x-1/2
+        flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium
+        shadow-xl backdrop-blur-sm animate-fade-in z-10 whitespace-nowrap
+        ${colours[type] ?? colours.info}
+      `}
+    >
+      {message}
+      <button onClick={onDismiss} className="ml-1 opacity-60 hover:opacity-100 transition-opacity text-xs">✕</button>
+    </div>
+  );
+}
+
 /* ─── Main Modal ─────────────────────────────────────────────────────────── */
 export default function ProposalDetailModal({
-  proposal, onClose, onVote, hasVoted, isVoting,
+  proposal, onClose, onVote, hasVoted: hasVotedProp, isVoting,
 }) {
+  const { account, isConnected } = useWeb3();
+
+  // ── Local vote state ──────────────────────────────────────────────────────
+  // Seeds from parent prop; re-verified on-open via checkVoted.
+  const [hasAlreadyVoted, setHasAlreadyVoted] = useState(hasVotedProp ?? false);
+  const [isCheckingVote, setIsCheckingVote] = useState(false);
+
+  // ── Toast state ───────────────────────────────────────────────────────────
+  const [toast, setToast] = useState(null); // { message, type }
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type });
+  }, []);
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  // ── On-open vote check ────────────────────────────────────────────────────
+  // Runs whenever this modal mounts (i.e. a proposal is selected) and the
+  // wallet is connected. This catches cases where the prop is stale.
+  useEffect(() => {
+    if (!proposal?.id || !isConnected || !account) {
+      // No wallet — just trust the prop
+      setHasAlreadyVoted(hasVotedProp ?? false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsCheckingVote(true);
+
+    checkVoted(proposal.id, account)
+      .then((voted) => {
+        if (!cancelled) setHasAlreadyVoted(voted);
+      })
+      .catch((err) => {
+        // Non-fatal: fall back to the prop value
+        console.warn('[ProposalDetailModal] checkVoted failed (non-fatal):', err.message);
+        if (!cancelled) setHasAlreadyVoted(hasVotedProp ?? false);
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingVote(false);
+      });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal?.id, account, isConnected]);
+
+  // ── Sync prop changes (e.g. parent optimistic update) ────────────────────
+  useEffect(() => {
+    if (hasVotedProp) setHasAlreadyVoted(true);
+  }, [hasVotedProp]);
+
+  // ── Vote handler (wraps parent's onVote) ──────────────────────────────────
+  // NOTE: index.js's handleVote never re-throws (to avoid crashing ProposalCard's
+  // fire-and-forget call). So we can't rely on catching an error here.
+  // Instead, we check the on-chain state after the call to determine outcome.
+  const handleVote = useCallback(async () => {
+    if (!onVote || hasAlreadyVoted || isVoting) return;
+
+    // Pre-guard: double-check on-chain before submitting (catches stale props)
+    if (isConnected && account) {
+      const alreadyOnChain = await checkVoted(proposal.id, account).catch(() => false);
+      if (alreadyOnChain) {
+        setHasAlreadyVoted(true);
+        showToast('✓ You have already voted on this proposal.', 'warning');
+        return;
+      }
+    }
+
+    // Fire the vote (index.js owns the tx + optimistic UI update)
+    await onVote(proposal.id);
+
+    // After onVote returns (success or swallowed error), verify on-chain state.
+    // If the tx succeeded → hasVoted will be true. If it failed (reverted) →
+    // the checkVoted will still be true (already voted) or false (other error).
+    if (isConnected && account) {
+      const votedNow = await checkVoted(proposal.id, account).catch(() => null);
+      if (votedNow === true) {
+        // Vote went through (or was already cast). Either way, disable button.
+        setHasAlreadyVoted(true);
+      } else if (votedNow === false) {
+        // Vote did NOT register — likely deadline passed or another contract revert.
+        showToast('⚠ Vote failed. The deadline may have passed.', 'error');
+      }
+      // votedNow === null means checkVoted RPC failed — leave state as-is.
+    } else {
+      // Wallet not connected path: parent handled it (opened wallet modal), nothing to do.
+      setHasAlreadyVoted(true);
+    }
+  }, [onVote, hasAlreadyVoted, isVoting, isConnected, account, proposal?.id, showToast]);
+
+  // ── Guard ─────────────────────────────────────────────────────────────────
   if (!proposal) return null;
 
   const cat            = proposal.category || 'Tech';
   const catStyle       = CATEGORY_STYLES[cat] || CATEGORY_STYLES.Tech;
   const dotStyle       = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
   const dl             = deadlineInfo(proposal.deadline);
-  const isDisabled     = hasVoted || isVoting || dl.expired;
   const formattedVotes = formatVoteCount(proposal.voteCount);
   const moonscanUrl    = `https://moonbase.moonscan.io/address/${proposal.proposer}`;
   const pct            = Math.min((proposal.voteCount / 1000) * 100, 100).toFixed(1);
@@ -78,8 +201,11 @@ export default function ProposalDetailModal({
       })
     : '—';
 
+  // Consolidated disabled logic
+  const isDisabled = hasAlreadyVoted || isVoting || isCheckingVote || dl.expired;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md"
@@ -165,23 +291,10 @@ export default function ProposalDetailModal({
           </div>
 
           {/* ── Glassmorphism Stats Row ── */}
-          <div className="flex gap-4">
-            <StatCard
-              icon={<IconVotes />}
-              label="Votes"
-              value={formattedVotes}
-              accent
-            />
-            <StatCard
-              icon={<IconClock />}
-              label="Time Left"
-              value={dl.expired ? 'Closed' : (dl.label || '—')}
-            />
-            <StatCard
-              icon={<IconCalendar />}
-              label="Expiration"
-              value={deadlineDate}
-            />
+          <div className="flex flex-wrap gap-3">
+            <StatCard icon={<IconVotes />} label="Votes" value={formattedVotes} accent />
+            <StatCard icon={<IconClock />} label="Time Left" value={dl.expired ? 'Closed' : (dl.label || '—')} />
+            <StatCard icon={<IconCalendar />} label="Expiration" value={deadlineDate} />
           </div>
 
           {/* ── Glowing Progress Bar ── */}
@@ -197,7 +310,12 @@ export default function ProposalDetailModal({
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-slate-700/50 flex gap-3 shrink-0">
+        <div className="relative px-6 py-4 border-t border-slate-700/50 flex gap-3 shrink-0">
+          {/* Toast lives inside the panel so it doesn't escape the modal */}
+          {toast && (
+            <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
+          )}
+
           <button
             onClick={onClose}
             className="flex-1 px-4 py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold text-sm
@@ -207,20 +325,22 @@ export default function ProposalDetailModal({
           </button>
 
           <button
-            onClick={() => !isDisabled && onVote && onVote(proposal.id)}
+            onClick={handleVote}
             disabled={isDisabled}
             className={`
               flex-1 px-4 py-3 rounded-xl font-semibold text-sm
               flex items-center justify-center gap-2 transition-all duration-200
               ${dl.expired
                 ? 'bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600'
-                : hasVoted
-                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                  : 'text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95'
+                : hasAlreadyVoted
+                  ? 'bg-slate-700/80 text-slate-400 cursor-not-allowed border border-slate-600/50'
+                  : isCheckingVote
+                    ? 'bg-slate-700/60 text-slate-500 cursor-wait'
+                    : 'text-white hover:shadow-lg hover:shadow-pink-500/30 active:scale-95'
               }
               ${isVoting ? 'opacity-70 cursor-wait' : ''}
             `}
-            style={!dl.expired && !hasVoted ? {
+            style={!dl.expired && !hasAlreadyVoted && !isCheckingVote ? {
               background: 'linear-gradient(135deg, #E6007A, #a855f7)',
             } : undefined}
           >
@@ -232,9 +352,17 @@ export default function ProposalDetailModal({
                 </svg>
                 Voting…
               </>
+            ) : isCheckingVote ? (
+              <>
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                Checking…
+              </>
             ) : dl.expired ? (
               '🔒 Voting Closed'
-            ) : hasVoted ? (
+            ) : hasAlreadyVoted ? (
               '✓ Already Voted'
             ) : (
               <>
