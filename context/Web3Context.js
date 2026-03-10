@@ -273,34 +273,36 @@ export function Web3Provider({ children }) {
 
   /**
    * Main connect wallet function
-   * @param {string} type - 'metamask' or 'phantom'
+   * @param {string} type - 'metamask' or 'phantom' (optional, defaults to metamask)
    */
   const connectWallet = useCallback(async (type) => {
-    // If already connected and no explicit wallet type requested, do nothing —
-    // this prevents navigation / indirect calls from popping the modal.
+    console.log('[Web3Context] connectWallet called! Button clicked!');
+    
+    // If already connected and no explicit wallet type requested, do nothing
     if (isConnected && !['metamask', 'phantom'].includes(type)) {
-      console.log('[Web3Context] Already connected, skipping modal');
+      console.log('[Web3Context] Already connected, skipping');
       return null;
     }
 
-    console.log('[Web3Context] connectWallet called with type:', type);
+    console.log('[Web3Context] connectWallet called with type:', type || 'metamask (default)');
     setIsConnecting(true);
 
     try {
-      if (type === 'metamask') {
+      // Default to MetaMask if no type specified
+      const walletTypeToUse = type === 'phantom' ? 'phantom' : 'metamask';
+      
+      console.log('[Web3Context] Connecting to:', walletTypeToUse);
+      
+      if (walletTypeToUse === 'metamask') {
         await connectMetaMask();
-      } else if (type === 'phantom') {
-        await connectPhantomEVM();
       } else {
-        // No valid type supplied — show the wallet selection modal
-        setShowWalletModal(true);
-        return null;
+        await connectPhantomEVM();
       }
 
       setShowWalletModal(false);
       return { account, walletType };
     } catch (error) {
-      console.error('[Web3Context] Connection error:', error);
+      console.error('[Web3Context] Connect error:', error);
       if (error.code === 4001) {
         throw new Error('Connection rejected by user');
       }
