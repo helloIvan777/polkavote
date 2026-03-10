@@ -1,19 +1,32 @@
 'use client';
 
 import React from 'react';
+import { useWeb3 } from '../context/Web3Context';
 
 /**
  * ConnectState - Reusable "Connect Wallet" State Component
  * Ensures consistent styling across all pages
+ * 
+ * @param {string} title - Main heading text
+ * @param {string} description - Subtitle/description text
+ * @param {React.ReactNode} icon - Icon component to display
+ * @param {string} buttonText - Text for the connect button (default: "Connect Wallet")
+ * @param {boolean} isConnecting - Loading state for the button
  */
 export default function ConnectState({ 
   title, 
   description, 
   icon, 
   buttonText = 'Connect Wallet',
-  onConnect,
   isConnecting = false
 }) {
+  const { openWalletModal } = useWeb3();
+
+  const handleConnect = () => {
+    // Open Wallet Selector Modal instead of direct connect
+    openWalletModal();
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
       {/* Card */}
@@ -35,7 +48,7 @@ export default function ConnectState({
 
         {/* Connect Button */}
         <button
-          onClick={onConnect}
+          onClick={handleConnect}
           disabled={isConnecting}
           className="px-8 py-4 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-semibold text-base
             hover:from-pink-600 hover:to-pink-700 transition-all duration-200

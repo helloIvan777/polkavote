@@ -84,7 +84,6 @@ export default function ProfilePage() {
             title="Connect Your Wallet"
             description="Connect to view your profile and activity"
             icon={<ProfileIcon />}
-            onConnect={() => connectWallet()}
             isConnecting={isConnecting}
           />
         ) : isLoading ? (

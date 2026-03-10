@@ -72,7 +72,6 @@ export default function ContributionsPage() {
             title="Connect Your Wallet"
             description="Connect to see your contribution history"
             icon={<VoteIcon />}
-            onConnect={connectWallet}
             isConnecting={isConnecting}
           />
         ) : isLoading ? (

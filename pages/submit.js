@@ -84,7 +84,6 @@ export default function SubmitPage() {
             title="Connect Your Wallet"
             description="You need to connect your wallet to submit a proposal"
             icon={<EmptyIcon />}
-            onConnect={connectWallet}
             isConnecting={isConnecting}
           />
         ) : (
