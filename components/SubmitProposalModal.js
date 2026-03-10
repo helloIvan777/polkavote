@@ -22,6 +22,7 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
   const [targetAmount, setTargetAmount] = useState(''); // DEV string
   const [errors, setErrors]         = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCheckingSafety, setIsCheckingSafety] = useState(false);
 
   const validate = () => {
     const e = {};
@@ -38,21 +39,115 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
-    if (!isConnected) { setErrors({ form: 'Please connect your wallet first' }); return; }
-    if (!signer)      { setErrors({ form: 'Wallet signer not available. Please reconnect.' }); return; }
+    
+    console.log('='.repeat(60));
+    console.log('[MOD] handleSubmit triggered');
+    console.log('='.repeat(60));
+    
+    // Step 1: Validate form fields
+    if (!validate()) {
+      console.warn('[MOD] Form validation failed');
+      return;
+    }
+    
+    if (!isConnected) { 
+      console.warn('[MOD] Wallet not connected');
+      setErrors({ form: 'Please connect your wallet first' }); 
+      return; 
+    }
+    
+    if (!signer) { 
+      console.warn('[MOD] No signer available');
+      setErrors({ form: 'Wallet signer not available. Please reconnect.' }); 
+      return; 
+    }
 
     try {
-      setIsSubmitting(true);
+      // Step 2: ATOMIC SUBMISSION GUARD - Set loading state
+      console.log('[MOD] Setting loading state...');
+      setIsCheckingSafety(true);
       setErrors({});
-      const result = await addProject(title, description, category, targetAmount, duration, signer);
-      resetForm();
-      if (onSuccess) onSuccess(result);
-      onClose();
+      
+      // Step 3: CALL THE API
+      console.log('[MOD] Analyzing content...');
+      console.log('[MOD] Title:', title);
+      console.log('[MOD] Description:', description);
+      
+      const modRes = await fetch('/api/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description }),
+      });
+      
+      console.log('[MOD] API response status:', modRes.status);
+      
+      // TASK 2: Deep Debugging - Console log the full response data
+      let modData;
+      try {
+        if (!modRes.ok) {
+           throw new Error(`HTTP Error: ${modRes.status}`);
+        }
+        modData = await modRes.json();
+      } catch (e) {
+        console.error('[MOD] API Failed or Failed to parse API response as JSON', e);
+        // TASK 2: Silent Fail with Friendly Message
+        modData = { safe: false, reason: 'Security service busy, please try again. (API down)' };
+      }
+      
+      console.log('='.repeat(60));
+      console.log('[MOD] Exact Data Received:', modData);
+      console.log('='.repeat(60));
+      
+      // Step 4: Reset loading state
+      setIsCheckingSafety(false);
+      
+      // Step 5: THE FINAL GATE (STRICT GUARD)
+      console.log('[MOD] Evaluating safety check...');
+      console.log('[MOD] modData.safe =', modData.safe);
+      
+      if (modData.safe === true) {
+        // ✅ ALLOWED - Content passed
+        console.log('✅ [MOD] SUCCESS - Content passed safety check');
+        console.log('[MOD] Proceeding to blockchain transaction...');
+
+        // Step 6: Safety passed - proceed with blockchain transaction
+        setIsSubmitting(true);
+        
+        console.log('[MOD] Calling addProject()...');
+        const result = await addProject(title, description, category, targetAmount, duration, signer);
+        
+        console.log('[MOD] Transaction completed:', result);
+        
+        resetForm();
+        if (onSuccess) onSuccess(result);
+        onClose();
+        
+        console.log('[MOD] Modal closed, form reset');
+      } else {
+        // ❌ BLOCKED - Show error in UI
+        console.warn('❌ [MOD] BLOCKED - Content failed safety check');
+        console.warn('[MOD] Reason:', modData.reason);
+        
+        // TASK 2: Show exact error in the UI
+        setErrors({ 
+          form: 'Safety Check Failed',
+          details: modData.reason || 'Content blocked by Security Guard.'
+        });
+      }
     } catch (err) {
+      console.error('❌ [MOD] Error in handleSubmit:', err);
+      console.error('[MOD] Error name:', err.name);
+      console.error('[MOD] Error message:', err.message);
+      
       setErrors({ form: err.message || 'Failed to launch project. Please try again.' });
     } finally {
+      console.log('[MOD] Finally block - resetting states');
+      // TASK 2: State Reset
+      setIsCheckingSafety(false);
       setIsSubmitting(false);
+      console.log('='.repeat(60));
+      console.log('[MOD] handleSubmit completed');
+      console.log('='.repeat(60));
     }
   };
 
@@ -117,7 +212,15 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
           {errors.form && (
             <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-              <p className="text-red-400 text-sm">{errors.form}</p>
+              <p className="text-red-400 text-sm font-medium">{errors.form}</p>
+              {errors.details && (
+                <p className="text-red-300 text-xs mt-2 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {errors.details}
+                </p>
+              )}
             </div>
           )}
 
@@ -195,18 +298,26 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
 
           {/* Buttons */}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={handleClose} disabled={isSubmitting}
+            <button type="button" onClick={handleClose} disabled={isSubmitting || isCheckingSafety}
               className="flex-1 px-4 py-3 bg-slate-700 text-white rounded-xl font-medium
                 hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               Cancel
             </button>
-            <button type="submit" disabled={isSubmitting || !isConnected}
+            <button type="submit" disabled={isSubmitting || isCheckingSafety || !isConnected}
               className={`flex-1 px-4 py-3 rounded-xl font-medium
                 bg-gradient-to-r from-pink-500 to-pink-600 text-white
                 hover:from-pink-600 hover:to-pink-700 transition-all duration-200
                 disabled:opacity-50 disabled:cursor-not-allowed
-                ${!isSubmitting && isConnected ? 'hover:shadow-lg hover:shadow-pink-500/30' : ''}`}>
-              {isSubmitting ? (
+                ${!isSubmitting && !isCheckingSafety && isConnected ? 'hover:shadow-lg hover:shadow-pink-500/30' : ''}`}>
+              {isCheckingSafety ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Checking safety...
+                </span>
+              ) : isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
