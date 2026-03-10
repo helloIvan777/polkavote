@@ -69,9 +69,12 @@ export default function ProfilePage() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-pink-500 mb-2">Profile</h1>
-          <p className="text-slate-400">
+        {/* Header - Centered Standardized */}
+        <div className="pt-10 mb-10 text-center">
+          <h1 className="text-4xl font-extrabold text-[#e6007a] mb-4">
+            Profile
+          </h1>
+          <p className="text-lg text-gray-400 mb-12">
             View your activity and contributions on PolkaFund
           </p>
         </div>
