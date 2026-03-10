@@ -189,11 +189,19 @@ export default function ProposalCard({ proposal, onContribute, onCardClick }) {
             </div>
           </div>
 
-          {dl.label && (
-            <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusBadgeStyle}`}>
-              {dl.label}
-            </span>
-          )}
+          {/* Right side metadata - vertical stack */}
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {dl.label && (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${statusBadgeStyle}`}>
+                {dl.label}
+              </span>
+            )}
+            {proposal.userContribution > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full border border-pink-500/30 bg-pink-500/20 text-pink-300 whitespace-nowrap">
+                You backed: {formatDEV(proposal.userContribution)}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Title */}

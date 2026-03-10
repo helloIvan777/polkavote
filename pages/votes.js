@@ -112,17 +112,10 @@ export default function ContributionsPage() {
           /* Contributed Projects Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
             {contributedProjects.map((project) => (
-              <div key={project.id} className="relative">
-                <ProposalCard
-                  proposal={project}
-                />
-                {/* Contribution badge */}
-                <div className="absolute top-3 right-3 px-2.5 py-1 bg-pink-500/20 border border-pink-500/30 rounded-full backdrop-blur-sm">
-                  <span className="text-xs font-semibold text-pink-300">
-                    You backed: {formatDEV(project.userContribution)}
-                  </span>
-                </div>
-              </div>
+              <ProposalCard
+                key={project.id}
+                proposal={project}
+              />
             ))}
           </div>
         )}
