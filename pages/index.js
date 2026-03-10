@@ -91,7 +91,7 @@ function EmptyState({ onAddProject, hasWallet }) {
 const PROJECTS_PER_PAGE = 9;
 
 export default function HomePage() {
-  const { account, isConnected, connectWallet, getSigner } = useWeb3();
+  const { account, isConnected, connectWallet, getSigner, openWalletModal, closeWalletModal, showWalletModal } = useWeb3();
 
   const [projects, setProjects]       = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
@@ -118,33 +118,42 @@ export default function HomePage() {
   // ── The Guard: Wallet Connection Check with Auto-Launch ──────────────────
   const handleLaunchClick = () => {
     if (account) {
-      // Wallet connected - open the modal immediately
+      // Wallet connected - open the SubmitProposalModal immediately
       console.log('[HomePage] Wallet connected, opening launch modal');
       setIsModalOpen(true);
     } else {
-      // Wallet not connected - set pending intent and trigger connection
-      console.log('[HomePage] Wallet not connected, setting pending launch and connecting...');
+      // Wallet NOT connected - set pending intent and OPEN WALLET SELECTOR
+      console.log('[HomePage] Wallet not connected, setting pending launch and opening wallet selector...');
       setIsPendingLaunch(true);
-      connectWallet();
+      openWalletModal(); // Opens the Wallet Selector Modal instead of direct connect
     }
   };
 
-  // ── Auto-Launch Hook: Opens modal after wallet connects ──────────────────
+  // ── Cleanup: Reset pending launch if wallet modal is closed without connecting ──────────────────
+  useEffect(() => {
+    // If wallet modal was closed AND we had a pending launch BUT no account yet
+    if (!showWalletModal && isPendingLaunch && !account) {
+      console.log('[HomePage] Wallet selector closed without connecting - clearing pending launch');
+      setIsPendingLaunch(false);
+    }
+  }, [showWalletModal, isPendingLaunch, account]);
+
+  // ── Auto-Launch Hook: Opens SubmitProposalModal after wallet connects ──────────────────
   useEffect(() => {
     let launchTimeout;
-    
+
     // If the wallet just connected AND we have a pending launch intent
     if (account && isPendingLaunch) {
       console.log('[HomePage] Wallet connected with pending launch - opening modal after delay...');
-      
-      // Delay modal opening to give user time to refocus after MetaMask closes
+
+      // Delay modal opening to give user time to refocus after wallet popup closes
       launchTimeout = setTimeout(() => {
-        setIsModalOpen(true);      // 1. Open the modal
+        setIsModalOpen(true);      // 1. Open the SubmitProposalModal
         setIsPendingLaunch(false); // 2. Clear the intent flag
         console.log('[HomePage] Opening modal now!');
       }, 700); // 700ms delay for smooth transition
     }
-    
+
     // Cleanup timeout on unmount or dependency change
     return () => {
       if (launchTimeout) clearTimeout(launchTimeout);
