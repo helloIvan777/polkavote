@@ -217,12 +217,31 @@ export default function HomePage() {
 
   // ── Auto-vote after wallet connects ──────────────────────────────────────
   // If the user clicked Vote while disconnected we queued the proposalId in
-  // pendingVoteRef. As soon as account is set, fire the vote automatically.
+  // pendingVoteRef. As soon as account is set, run checkVoted FIRST before
+  // firing the transaction — this is the same gate the modal uses.
   useEffect(() => {
     if (!account || pendingVoteRef.current === null) return;
     const id = pendingVoteRef.current;
     pendingVoteRef.current = null;
-    handleVote(id);
+
+    (async () => {
+      try {
+        const alreadyVoted = await checkVoted(id, account);
+        if (alreadyVoted) {
+          console.log('[HomePage] Auto-vote skipped: already voted on proposal', id);
+          // Update the proposal card to reflect the voted state without a full reload
+          setProposals(prev => prev.map(p =>
+            p.id === id ? { ...p, hasVoted: true } : p
+          ));
+          return;
+        }
+        // Check passed — safe to proceed with the transaction
+        handleVote(id);
+      } catch (err) {
+        console.warn('[HomePage] checkVoted before auto-vote failed, proceeding anyway:', err.message);
+        handleVote(id);
+      }
+    })();
   }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
 
 

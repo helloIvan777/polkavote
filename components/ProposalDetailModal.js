@@ -100,7 +100,8 @@ export default function ProposalDetailModal({
   // ── Local vote state ──────────────────────────────────────────────────────
   // Seeds from parent prop; re-verified on-open via checkVoted.
   const [hasAlreadyVoted, setHasAlreadyVoted] = useState(hasVotedProp ?? false);
-  const [isCheckingVote, setIsCheckingVote] = useState(false);
+  const [isCheckingVote, setIsCheckingVote] = useState(false); // on-open background check
+  const [isVerifying, setIsVerifying]         = useState(false); // in-flight pre-guard check
 
   // ── Toast state ───────────────────────────────────────────────────────────
   const [toast, setToast] = useState(null); // { message, type }
@@ -149,11 +150,19 @@ export default function ProposalDetailModal({
   // fire-and-forget call). So we can't rely on catching an error here.
   // Instead, we check the on-chain state after the call to determine outcome.
   const handleVote = useCallback(async () => {
-    if (!onVote || hasAlreadyVoted || isVoting) return;
+    if (!onVote || hasAlreadyVoted || isVoting || isVerifying) return;
 
-    // Pre-guard: double-check on-chain before submitting (catches stale props)
+    // Pre-guard: double-check on-chain BEFORE opening MetaMask (catches stale props)
     if (isConnected && account) {
-      const alreadyOnChain = await checkVoted(proposal.id, account).catch(() => false);
+      setIsVerifying(true);
+      let alreadyOnChain = false;
+      try {
+        alreadyOnChain = await checkVoted(proposal.id, account);
+      } catch (err) {
+        console.warn('[ProposalDetailModal] pre-guard checkVoted failed, proceeding:', err.message);
+      } finally {
+        setIsVerifying(false);
+      }
       if (alreadyOnChain) {
         setHasAlreadyVoted(true);
         showToast('✓ You have already voted on this proposal.', 'warning');
@@ -161,27 +170,21 @@ export default function ProposalDetailModal({
       }
     }
 
-    // Fire the vote (index.js owns the tx + optimistic UI update)
+    // Check passed — fire the vote (index.js owns the tx + optimistic UI update)
     await onVote(proposal.id);
 
-    // After onVote returns (success or swallowed error), verify on-chain state.
-    // If the tx succeeded → hasVoted will be true. If it failed (reverted) →
-    // the checkVoted will still be true (already voted) or false (other error).
+    // Post-verify: read on-chain state to confirm outcome
     if (isConnected && account) {
       const votedNow = await checkVoted(proposal.id, account).catch(() => null);
       if (votedNow === true) {
-        // Vote went through (or was already cast). Either way, disable button.
         setHasAlreadyVoted(true);
       } else if (votedNow === false) {
-        // Vote did NOT register — likely deadline passed or another contract revert.
         showToast('⚠ Vote failed. The deadline may have passed.', 'error');
       }
-      // votedNow === null means checkVoted RPC failed — leave state as-is.
     } else {
-      // Wallet not connected path: parent handled it (opened wallet modal), nothing to do.
       setHasAlreadyVoted(true);
     }
-  }, [onVote, hasAlreadyVoted, isVoting, isConnected, account, proposal?.id, showToast]);
+  }, [onVote, hasAlreadyVoted, isVoting, isVerifying, isConnected, account, proposal?.id, showToast]);
 
   // ── Guard ─────────────────────────────────────────────────────────────────
   if (!proposal) return null;
@@ -202,7 +205,7 @@ export default function ProposalDetailModal({
     : '—';
 
   // Consolidated disabled logic
-  const isDisabled = hasAlreadyVoted || isVoting || isCheckingVote || dl.expired;
+  const isDisabled = hasAlreadyVoted || isVoting || isCheckingVote || isVerifying || dl.expired;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -340,7 +343,7 @@ export default function ProposalDetailModal({
               }
               ${isVoting ? 'opacity-70 cursor-wait' : ''}
             `}
-            style={!dl.expired && !hasAlreadyVoted && !isCheckingVote ? {
+            style={!dl.expired && !hasAlreadyVoted && !isCheckingVote && !isVerifying ? {
               background: 'linear-gradient(135deg, #E6007A, #a855f7)',
             } : undefined}
           >
@@ -351,6 +354,14 @@ export default function ProposalDetailModal({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                 </svg>
                 Voting…
+              </>
+            ) : isVerifying ? (
+              <>
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                Verifying…
               </>
             ) : isCheckingVote ? (
               <>
