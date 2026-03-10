@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import ConnectState, { ProfileIcon } from '../components/ConnectState';
 import ProposalCard from '../components/ProposalCard';
 import ProposalDetailModal from '../components/ProposalDetailModal';
+import FilterBar from '../components/FilterBar';
 import { useWeb3 } from '../context/Web3Context';
 import { fetchAllProjects, getContribution, truncateAddress } from '../utils/web3';
 
@@ -20,6 +21,8 @@ export default function ProfilePage() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const projectsPerPage = 6;
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
 
   const loadUserStats = async (address) => {
     try {
@@ -53,11 +56,39 @@ export default function ProfilePage() {
     }
   };
 
-  // Pagination logic
+  // Pagination and Filtering logic
+  let filteredMyProposals = [...myProposals];
+
+  // Apply Search
+  if (searchTerm) {
+    const lowerSearch = searchTerm.toLowerCase();
+    filteredMyProposals = filteredMyProposals.filter(p => {
+      // Check Title & Description
+      const matchesText =
+        p.title.toLowerCase().includes(lowerSearch) ||
+        p.description.toLowerCase().includes(lowerSearch);
+
+      // Check Wallet Address (Creator)
+      const matchesAddress =
+        p.creator && p.creator.toLowerCase().includes(lowerSearch);
+
+      return matchesText || matchesAddress;
+    });
+  }
+
+  // Apply Sorting
+  if (sortBy === 'newest') {
+    filteredMyProposals.sort((a, b) => b.timestamp - a.timestamp);
+  } else if (sortBy === 'ending') {
+    filteredMyProposals.sort((a, b) => a.deadline - b.deadline);
+  } else if (sortBy === 'funded') {
+    filteredMyProposals.sort((a, b) => b.raisedAmount - a.raisedAmount);
+  }
+
   const indexOfLastProject = currentPage * projectsPerPage;
   const indexOfFirstProject = indexOfLastProject - projectsPerPage;
-  const currentMyProposals = myProposals.slice(indexOfFirstProject, indexOfLastProject);
-  const totalPages = Math.ceil(myProposals.length / projectsPerPage);
+  const currentMyProposals = filteredMyProposals.slice(indexOfFirstProject, indexOfLastProject);
+  const totalPages = Math.ceil(filteredMyProposals.length / projectsPerPage);
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
@@ -220,6 +251,23 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <>
+                  {/* Filter Bar - Search and Sort */}
+                  <div className="mb-6">
+                    <FilterBar
+                      searchTerm={searchTerm}
+                      setSearchTerm={(value) => {
+                        setSearchTerm(value);
+                        setCurrentPage(1);
+                      }}
+                      sortBy={sortBy}
+                      setSortBy={(value) => {
+                        setSortBy(value);
+                        setCurrentPage(1);
+                      }}
+                      totalResults={filteredMyProposals.length}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {currentMyProposals.map((proposal) => (
                       <ProposalCard
@@ -265,7 +313,7 @@ export default function ProfilePage() {
 
                       <button
                         onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={indexOfLastProject >= myProposals.length}
+                        disabled={indexOfLastProject >= filteredMyProposals.length}
                         className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200
                           bg-slate-800/60 border border-slate-700/60 text-slate-300
                           hover:border-pink-500/50 hover:text-white

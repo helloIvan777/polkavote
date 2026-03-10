@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import ProposalCard from '../components/ProposalCard';
 import ProposalDetailModal from '../components/ProposalDetailModal';
 import SubmitProposalModal from '../components/SubmitProposalModal';
+import FilterBar from '../components/FilterBar';
 import { useWeb3 } from '../context/Web3Context';
 import {
   fetchAllProjects,
@@ -103,6 +104,8 @@ export default function HomePage() {
   const [stats, setStats]             = useState({ projectCount: 0, totalRaised: 0 });
   const [error, setError]             = useState(null);
   const [isPendingLaunch, setIsPendingLaunch] = useState(false); // Pending launch intent
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
 
   const projectsSectionRef = React.useRef(null);
 
@@ -160,9 +163,36 @@ export default function HomePage() {
     };
   }, [account, isPendingLaunch]);
 
-  const filteredProjects = activeCategory === 'All'
+  // ── Filter, Search, and Sort Projects ─────────────────────────────────────
+  let filteredProjects = activeCategory === 'All'
     ? projects
     : projects.filter((p) => p.category === activeCategory);
+
+  // Apply Search
+  if (searchTerm) {
+    const lowerSearch = searchTerm.toLowerCase();
+    filteredProjects = filteredProjects.filter(p => {
+      // Check Title & Description
+      const matchesText =
+        p.title.toLowerCase().includes(lowerSearch) ||
+        p.description.toLowerCase().includes(lowerSearch);
+
+      // Check Wallet Address (Creator)
+      const matchesAddress =
+        p.creator && p.creator.toLowerCase().includes(lowerSearch);
+
+      return matchesText || matchesAddress;
+    });
+  }
+
+  // Apply Sorting
+  if (sortBy === 'newest') {
+    filteredProjects = [...filteredProjects].sort((a, b) => b.timestamp - a.timestamp);
+  } else if (sortBy === 'ending') {
+    filteredProjects = [...filteredProjects].sort((a, b) => a.deadline - b.deadline);
+  } else if (sortBy === 'funded') {
+    filteredProjects = [...filteredProjects].sort((a, b) => b.raisedAmount - a.raisedAmount);
+  }
 
   const totalPages      = Math.max(1, Math.ceil(filteredProjects.length / PROJECTS_PER_PAGE));
   const indexOfLastItem = currentPage * PROJECTS_PER_PAGE;
@@ -181,6 +211,11 @@ export default function HomePage() {
   const handleCategoryChange = (tab) => {
     setActiveCategory(tab);
     setCurrentPage(1);
+    setSearchTerm(''); // Reset search when changing categories
+  };
+
+  const handleSearchOrSortChange = () => {
+    setCurrentPage(1); // Reset to first page when search/sort changes
   };
 
   // ── Load projects ──────────────────────────────────────────────────────────
@@ -405,6 +440,23 @@ export default function HomePage() {
                 )}
               </button>
             ))}
+          </div>
+
+          {/* Filter Bar - Search and Sort */}
+          <div className="mb-6">
+            <FilterBar
+              searchTerm={searchTerm}
+              setSearchTerm={(value) => {
+                setSearchTerm(value);
+                handleSearchOrSortChange();
+              }}
+              sortBy={sortBy}
+              setSortBy={(value) => {
+                setSortBy(value);
+                handleSearchOrSortChange();
+              }}
+              totalResults={filteredProjects.length}
+            />
           </div>
 
           {/* Loading State */}
