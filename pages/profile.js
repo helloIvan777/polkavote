@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Layout from '../components/Layout';
 import ConnectState, { ProfileIcon } from '../components/ConnectState';
 import { useWeb3 } from '../context/Web3Context';
@@ -148,7 +149,7 @@ export default function ProfilePage() {
             <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700/50">
               <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-3">
-                <a
+                <Link
                   href="/"
                   className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-700/50 rounded-xl text-white
                     hover:bg-slate-700 transition-colors"
@@ -157,8 +158,8 @@ export default function ProfilePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
                   Browse Ideas
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/submit"
                   className="flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-pink-500 to-pink-600 rounded-xl text-white
                     hover:from-pink-600 hover:to-pink-700 transition-all"
@@ -167,7 +168,7 @@ export default function ProfilePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   New Proposal
-                </a>
+                </Link>
               </div>
             </div>
           </>
