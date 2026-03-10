@@ -51,20 +51,26 @@ function StatCard({ icon, label, value, accent = false }) {
 
 /* ─── Glowing Funding Progress Bar ──────────────────────────────────────── */
 function GlowProgressBar({ raisedAmount, targetAmount }) {
-  const pct = targetAmount > 0 ? Math.min((raisedAmount / targetAmount) * 100, 100) : 0;
+  const pct = targetAmount > 0 ? (raisedAmount / targetAmount) * 100 : 0;
+  const isOverfunded = raisedAmount > targetAmount && targetAmount > 0;
   const isSuccess = pct >= 100;
   return (
     <div className="w-full bg-slate-700/50 rounded-full h-2.5 overflow-hidden">
       <div
         className="h-full rounded-full transition-all duration-700"
         style={{
-          width: `${pct}%`,
-          background: isSuccess
+          width: `${Math.min(pct, 100)}%`,
+          background: isOverfunded
+            ? 'linear-gradient(90deg, #facc15, #4ade80)'
+            : isSuccess
             ? 'linear-gradient(90deg, #10b981, #34d399)'
             : 'linear-gradient(90deg, #E6007A, #a855f7)',
-          boxShadow: isSuccess
+          boxShadow: isOverfunded
+            ? '0 0 15px rgba(250, 204, 21, 0.8)'
+            : isSuccess
             ? '0 0 10px rgba(16,185,129,0.6)'
             : '0 0 10px rgba(230,0,122,0.6), 0 0 20px rgba(168,85,247,0.3)',
+          animation: isOverfunded ? 'pulse 1.5s ease-in-out infinite' : 'none',
         }}
       />
     </div>
@@ -133,8 +139,12 @@ export default function ProposalDetailModal({
   const dotStyle   = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
   const dl         = deadlineInfo(proposal.deadline, proposal.raisedAmount, proposal.targetAmount);
   const isExpired  = dl.status === 'success' || dl.status === 'failed';
+  const currentTime = Date.now();
+  const deadline   = proposal.deadline || 0;
+  const isGoalMet  = proposal.raisedAmount >= proposal.targetAmount;
+  const isOverfunded = proposal.raisedAmount > proposal.targetAmount && proposal.targetAmount > 0;
   const pct        = proposal.targetAmount > 0
-    ? Math.min((proposal.raisedAmount / proposal.targetAmount) * 100, 100).toFixed(1)
+    ? ((proposal.raisedAmount / proposal.targetAmount) * 100).toFixed(1)
     : '0.0';
 
   const moonscanUrl = `https://moonbase.moonscan.io/address/${proposal.creator}`;
@@ -149,11 +159,38 @@ export default function ProposalDetailModal({
   const isCreator = account && proposal.creator &&
     account.toLowerCase() === proposal.creator.toLowerCase();
 
-  const canContribute  = !isExpired && isConnected;
-  const canWithdraw    = isExpired && isCreator &&
-    proposal.raisedAmount >= proposal.targetAmount && !proposal.withdrawn;
-  const canRefund      = isExpired && !isCreator &&
-    proposal.raisedAmount < proposal.targetAmount && userContribution > 0;
+  // Dynamic button logic based on currentTime vs deadline
+  let showContributeBtn = false;
+  let showWithdrawBtn = false;
+  let showRefundBtn = false;
+  let showDisabledBtn = false;
+  let disabledBtnLabel = '';
+
+  if (currentTime < deadline) {
+    // Campaign still active - allow backing (including overfunding)
+    showContributeBtn = isConnected;
+  } else {
+    // Deadline passed
+    if (isGoalMet) {
+      if (proposal.withdrawn) {
+        showDisabledBtn = true;
+        disabledBtnLabel = '✓ FUNDS CLAIMED';
+      } else if (isCreator) {
+        showWithdrawBtn = true;
+      } else {
+        showDisabledBtn = true;
+        disabledBtnLabel = '🎉 CAMPAIGN SUCCESSFUL';
+      }
+    } else {
+      // Goal not met
+      if (userContribution > 0) {
+        showRefundBtn = true;
+      } else {
+        showDisabledBtn = true;
+        disabledBtnLabel = '✕ CAMPAIGN FAILED';
+      }
+    }
+  }
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleContribute = async () => {
@@ -294,7 +331,9 @@ export default function ProposalDetailModal({
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Funding Progress
               </p>
-              <span className="text-xs font-mono font-semibold text-slate-400">{pct}%</span>
+              <span className={`text-xs font-mono font-semibold ${
+                isOverfunded ? 'text-yellow-400' : 'text-slate-400'
+              }`}>{pct}%</span>
             </div>
             <GlowProgressBar raisedAmount={proposal.raisedAmount} targetAmount={proposal.targetAmount} />
             <p className="text-xs text-slate-500 text-right">
@@ -317,7 +356,7 @@ export default function ProposalDetailModal({
           )}
 
           {/* ── Contribution Input (only if campaign is active) ── */}
-          {canContribute && (
+          {showContributeBtn && (
             <div className="rounded-xl border border-white/10 p-4 space-y-3"
               style={{ background: 'rgba(255,255,255,0.03)' }}>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -371,7 +410,7 @@ export default function ProposalDetailModal({
           </button>
 
           {/* Back this Project */}
-          {canContribute && (
+          {showContributeBtn && (
             <button
               onClick={handleContribute}
               disabled={isActing}
@@ -386,7 +425,7 @@ export default function ProposalDetailModal({
           )}
 
           {/* Withdraw Funds (creator, goal met, deadline passed) */}
-          {canWithdraw && (
+          {showWithdrawBtn && (
             <button
               onClick={handleWithdraw}
               disabled={isActing}
@@ -401,7 +440,7 @@ export default function ProposalDetailModal({
           )}
 
           {/* Claim Refund (backer, goal not met, deadline passed) */}
-          {canRefund && (
+          {showRefundBtn && (
             <button
               onClick={handleRefund}
               disabled={isActing}
@@ -416,10 +455,10 @@ export default function ProposalDetailModal({
           )}
 
           {/* Expired, no action available */}
-          {isExpired && !canWithdraw && !canRefund && (
+          {showDisabledBtn && (
             <button disabled className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
               bg-slate-700/60 text-slate-500 cursor-not-allowed border border-slate-600">
-              {dl.status === 'success' ? '🎉 Campaign Successful' : '✕ Campaign Ended'}
+              {disabledBtnLabel}
             </button>
           )}
         </div>

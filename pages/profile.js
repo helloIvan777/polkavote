@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { useWeb3 } from '../context/Web3Context';
-import { fetchAllProposals, checkVoted, truncateAddress } from '../utils/web3';
+import { fetchAllProjects, getContribution, truncateAddress } from '../utils/web3';
 
 export default function ProfilePage() {
   const { account, isConnected, connectWallet, isConnecting } = useWeb3();
 
   const [userStats, setUserStats] = useState({
     proposalsCreated: 0,
-    votesCast: 0,
+    projectsBacked: 0,
     proposalIds: []
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -16,21 +16,23 @@ export default function ProfilePage() {
   const loadUserStats = async (address) => {
     try {
       setIsLoading(true);
-      const allProposals = await fetchAllProposals();
+      const allProjects = await fetchAllProjects();
 
-      const userProposals = allProposals.filter(p =>
-        p.proposer.toLowerCase() === address.toLowerCase()
+      // Count projects created by user
+      const userProposals = allProjects.filter(p =>
+        p.creator.toLowerCase() === address.toLowerCase()
       );
 
-      let votesCast = 0;
-      for (const proposal of allProposals) {
-        const hasVoted = await checkVoted(proposal.id, address);
-        if (hasVoted) votesCast++;
+      // Count projects the user has backed (contributed to)
+      let projectsBacked = 0;
+      for (const project of allProjects) {
+        const contribution = await getContribution(project.id, address);
+        if (contribution > 0) projectsBacked++;
       }
 
       setUserStats({
         proposalsCreated: userProposals.length,
-        votesCast,
+        projectsBacked,
         proposalIds: userProposals.map(p => p.id)
       });
     } catch (err) {
@@ -69,7 +71,7 @@ export default function ProfilePage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-pink-500 mb-2">Profile</h1>
           <p className="text-slate-400">
-            View your activity and contributions
+            View your activity and contributions on PolkaFund
           </p>
         </div>
 
@@ -142,13 +144,13 @@ export default function ProfilePage() {
               </div>
               <div className="bg-slate-800 rounded-xl p-4 border border-slate-700/50 text-center">
                 <div className="text-3xl font-bold text-pink-500 mb-1">
-                  {userStats.votesCast}
+                  {userStats.projectsBacked}
                 </div>
-                <div className="text-slate-400 text-sm">Votes Cast</div>
+                <div className="text-slate-400 text-sm">Projects Backed</div>
               </div>
               <div className="bg-slate-800 rounded-xl p-4 border border-slate-700/50 text-center">
                 <div className="text-3xl font-bold text-pink-500 mb-1">
-                  {userStats.proposalsCreated + userStats.votesCast}
+                  {userStats.proposalsCreated + userStats.projectsBacked}
                 </div>
                 <div className="text-slate-400 text-sm">Total Activity</div>
               </div>

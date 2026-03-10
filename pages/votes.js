@@ -4,34 +4,43 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import ProposalCard from '../components/ProposalCard';
 import { useWeb3 } from '../context/Web3Context';
-import { fetchAllProposals, checkVoted } from '../utils/web3';
+import { fetchAllProjects, getContribution, formatDEV } from '../utils/web3';
 
 /**
- * My Votes Page
+ * My Contributions Page
  */
-export default function VotesPage() {
-  // Use useWeb3 hook from context
+export default function ContributionsPage() {
   const { account, isConnected, connectWallet, isConnecting } = useWeb3();
-  
-  const [votedProposals, setVotedProposals] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [votingStates, setVotingStates] = useState({});
 
-  const loadVotedProposals = async (address) => {
+  const [contributedProjects, setContributedProjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [contributionStates, setContributionStates] = useState({});
+
+  const loadContributedProjects = async (address) => {
     try {
       setIsLoading(true);
-      const allProposals = await fetchAllProposals();
-      
-      const voted = await Promise.all(
-        allProposals.map(async (proposal) => {
-          const hasVoted = await checkVoted(proposal.id, address);
-          return { ...proposal, hasVoted };
+      const allProjects = await fetchAllProjects();
+
+      // Fetch contributions for all projects in parallel
+      const contributions = await Promise.all(
+        allProjects.map(async (project) => {
+          const amount = await getContribution(project.id, address);
+          return { ...project, userContribution: amount };
         })
       );
 
-      setVotedProposals(voted.filter(p => p.hasVoted));
+      // Filter to only projects where user contributed > 0
+      const contributed = contributions.filter(p => p.userContribution > 0);
+      setContributedProjects(contributed);
+
+      // Store contribution amounts for display
+      const states = {};
+      contributed.forEach(p => {
+        states[p.id] = p.userContribution;
+      });
+      setContributionStates(states);
     } catch (err) {
-      console.error('Error loading voted proposals:', err);
+      console.error('Error loading contributed projects:', err);
     } finally {
       setIsLoading(false);
     }
@@ -39,7 +48,7 @@ export default function VotesPage() {
 
   useEffect(() => {
     if (account) {
-      loadVotedProposals(account);
+      loadContributedProjects(account);
     }
   }, [account]);
 
@@ -48,9 +57,9 @@ export default function VotesPage() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-pink-500 mb-2">My Votes</h1>
+          <h1 className="text-3xl font-bold text-pink-500 mb-2">My Contributions</h1>
           <p className="text-slate-400">
-            Track all the proposals you've voted on
+            Track all the projects you've backed
           </p>
         </div>
 
@@ -64,7 +73,7 @@ export default function VotesPage() {
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Connect Your Wallet</h2>
             <p className="text-slate-400 mb-6">
-              Connect to see your voting history
+              Connect to see your contribution history
             </p>
             <button
               onClick={connectWallet}
@@ -86,7 +95,7 @@ export default function VotesPage() {
               </div>
             ))}
           </div>
-        ) : votedProposals.length === 0 ? (
+        ) : contributedProjects.length === 0 ? (
           /* Empty State */
           <div className="text-center py-16">
             <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -94,21 +103,26 @@ export default function VotesPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">No Votes Yet</h3>
+            <h3 className="text-xl font-bold text-white mb-2">No Contributions Yet</h3>
             <p className="text-slate-400 max-w-md mx-auto">
-              You haven't voted on any proposals yet. Browse the home page to find ideas to support!
+              You haven't backed any projects yet. Browse the home page to find ideas to support!
             </p>
           </div>
         ) : (
-          /* Voted Proposals Grid */
+          /* Contributed Projects Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-            {votedProposals.map((proposal) => (
-              <ProposalCard
-                key={proposal.id}
-                proposal={proposal}
-                hasVoted={true}
-                isVoting={votingStates[proposal.id]}
-              />
+            {contributedProjects.map((project) => (
+              <div key={project.id} className="relative">
+                <ProposalCard
+                  proposal={project}
+                />
+                {/* Contribution badge */}
+                <div className="absolute top-3 right-3 px-2.5 py-1 bg-pink-500/20 border border-pink-500/30 rounded-full backdrop-blur-sm">
+                  <span className="text-xs font-semibold text-pink-300">
+                    You backed: {formatDEV(project.userContribution)}
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
         )}

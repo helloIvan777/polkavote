@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { formatDEV, formatRelativeTime, truncateAddress } from '../utils/web3';
+import { useWeb3 } from '../context/Web3Context';
 
 export const CATEGORY_STYLES = {
   Tech:      'bg-blue-500/20  text-blue-300  border-blue-500/30',
@@ -61,31 +62,53 @@ function FundingProgressBar({ raisedAmount, targetAmount }) {
   const pct = targetAmount > 0
     ? Math.min((raisedAmount / targetAmount) * 100, 100)
     : 0;
+  const isOverfunded = raisedAmount > targetAmount && targetAmount > 0;
   const isSuccess = pct >= 100;
   return (
     <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
       <div
         className={`h-full rounded-full transition-all duration-700 ${
-          isSuccess
+          isOverfunded
+            ? 'bg-gradient-to-r from-yellow-400 to-green-400 animate-pulse'
+            : isSuccess
             ? 'bg-gradient-to-r from-emerald-500 to-green-400'
             : 'bg-gradient-to-r from-pink-500 to-pink-600'
         }`}
-        style={{ width: `${pct}%` }}
+        style={{
+          width: `${pct}%`,
+          boxShadow: isOverfunded ? '0 0 10px rgba(250, 204, 21, 0.6)' : undefined,
+        }}
       />
     </div>
   );
 }
 
 export default function ProposalCard({ proposal, onContribute, onCardClick }) {
+  const { account } = useWeb3();
   const [isHovered, setIsHovered] = useState(false);
+
+  // Convert BigInt to number for comparisons if needed
+  const raisedAmount = typeof proposal.raisedAmount === 'bigint'
+    ? Number(proposal.raisedAmount)
+    : proposal.raisedAmount || 0;
+  const targetAmount = typeof proposal.targetAmount === 'bigint'
+    ? Number(proposal.targetAmount)
+    : proposal.targetAmount || 0;
+  const userContribution = typeof proposal.userContribution === 'bigint'
+    ? Number(proposal.userContribution)
+    : proposal.userContribution || 0;
 
   const relativeTime = formatRelativeTime(proposal.timestamp);
   const shortAddress = truncateAddress(proposal.creator, 4, 4);
   const cat          = proposal.category || 'Tech';
   const catStyle     = CATEGORY_STYLES[cat] || CATEGORY_STYLES.Tech;
   const dotStyle     = CATEGORY_DOT[cat]    || CATEGORY_DOT.Tech;
-  const dl           = deadlineInfo(proposal.deadline, proposal.raisedAmount, proposal.targetAmount);
+  const dl           = deadlineInfo(proposal.deadline, raisedAmount, targetAmount);
   const isExpired    = dl.status === 'success' || dl.status === 'failed';
+  const currentTime  = Date.now();
+  const deadline     = proposal.deadline || 0;
+  const isGoalMet    = raisedAmount >= targetAmount;
+  const isOverfunded = raisedAmount > targetAmount && targetAmount > 0;
 
   const truncatedDesc = proposal.description.length > 100
     ? proposal.description.slice(0, 100) + '…'
@@ -99,15 +122,42 @@ export default function ProposalCard({ proposal, onContribute, onCardClick }) {
     active:  'bg-amber-500/15   text-amber-300   border-amber-500/30',
   }[dl.status] ?? 'bg-slate-700/60 text-slate-400 border-slate-600';
 
-  // CTA button appearance
-  const btnLabel = {
-    success: '🎉 Fully Funded',
-    failed:  '✕ Goal Not Met',
-    closing: '⚡ BACK PROJECT',
-    active:  '💜 BACK PROJECT',
-  }[dl.status] ?? '💜 BACK PROJECT';
+  // CTA button appearance - Dynamic button logic
+  let btnLabel, btnStyle, canContribute;
+  const isCreator = account && proposal.creator &&
+    account.toLowerCase() === proposal.creator.toLowerCase();
 
-  const canContribute = !isExpired;
+  if (currentTime < deadline) {
+    // Campaign still active - allow backing (including overfunding)
+    btnLabel = '💜 BACK PROJECT';
+    btnStyle = 'bg-gradient-to-r from-pink-500 to-pink-600 text-white hover:from-pink-600 hover:to-pink-700 hover:shadow-md hover:shadow-pink-500/30 active:scale-95';
+    canContribute = true;
+  } else {
+    // Deadline passed
+    if (isGoalMet) {
+      if (proposal.withdrawn) {
+        btnLabel = '✓ FUNDS CLAIMED';
+        btnStyle = 'bg-slate-700/60 text-slate-500 border border-slate-600 cursor-default';
+      } else if (isCreator) {
+        btnLabel = '🏦 WITHDRAW FUNDS';
+        btnStyle = 'bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400 hover:shadow-md hover:shadow-emerald-500/30 active:scale-95';
+      } else {
+        btnLabel = '🎉 CAMPAIGN SUCCESSFUL';
+        btnStyle = 'bg-emerald-900/40 text-emerald-400 border border-emerald-600/30 cursor-default';
+      }
+      canContribute = false;
+    } else {
+      // Goal not met
+      if (userContribution > 0) {
+        btnLabel = '↩ CLAIM REFUND';
+        btnStyle = 'bg-gradient-to-r from-amber-600 to-orange-500 text-white hover:from-amber-500 hover:to-orange-400 hover:shadow-md hover:shadow-amber-500/30 active:scale-95';
+      } else {
+        btnLabel = '✕ CAMPAIGN FAILED';
+        btnStyle = 'bg-slate-700/60 text-slate-500 border border-slate-600 cursor-default';
+      }
+      canContribute = false;
+    }
+  }
 
   return (
     <article
@@ -178,12 +228,16 @@ export default function ProposalCard({ proposal, onContribute, onCardClick }) {
             </span>
           </div>
           <FundingProgressBar
-            raisedAmount={proposal.raisedAmount}
-            targetAmount={proposal.targetAmount}
+            raisedAmount={raisedAmount}
+            targetAmount={targetAmount}
           />
-          <p className="text-right text-[10px] text-slate-500">
-            {proposal.targetAmount > 0
-              ? `${Math.min(((proposal.raisedAmount / proposal.targetAmount) * 100), 100).toFixed(1)}% funded`
+          <p className={`text-right text-[10px] ${
+            raisedAmount > targetAmount && targetAmount > 0
+              ? 'text-yellow-400 font-semibold'
+              : 'text-slate-500'
+          }`}>
+            {targetAmount > 0
+              ? `${((raisedAmount / targetAmount) * 100).toFixed(1)}% funded`
               : '0% funded'}
           </p>
         </div>
@@ -193,18 +247,13 @@ export default function ProposalCard({ proposal, onContribute, onCardClick }) {
           onClick={(e) => {
             e.stopPropagation();
             if (canContribute && onContribute) onContribute(proposal.id);
-            else if (!isExpired) onCardClick && onCardClick(proposal);
+            else if (currentTime < deadline) onCardClick && onCardClick(proposal);
           }}
-          disabled={isExpired}
+          disabled={!canContribute}
           className={`
             w-full py-2.5 px-4 rounded-xl font-semibold text-sm
             transition-all duration-200 flex items-center justify-center gap-2
-            ${dl.status === 'success'
-              ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-600/30 cursor-default'
-              : dl.status === 'failed'
-              ? 'bg-slate-700/60 text-slate-500 border border-slate-600 cursor-default'
-              : 'bg-gradient-to-r from-pink-500 to-pink-600 text-white hover:from-pink-600 hover:to-pink-700 hover:shadow-md hover:shadow-pink-500/30 active:scale-95'
-            }
+            ${btnStyle}
           `}
         >
           {btnLabel}
