@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import SubmitProposalModal from '../components/SubmitProposalModal';
+import ConnectState, { EmptyIcon } from '../components/ConnectState';
 import { useWeb3 } from '../context/Web3Context';
 import { addProposal } from '../utils/web3';
 
@@ -10,9 +11,8 @@ import { addProposal } from '../utils/web3';
  * Submit Idea Page
  */
 export default function SubmitPage() {
-  // Use useWeb3 hook from context
   const { account, isConnected, connectWallet, getSigner, isConnecting } = useWeb3();
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
@@ -76,29 +76,15 @@ export default function SubmitPage() {
           </p>
         </div>
 
-        {/* Connect Wallet Card */}
+        {/* Connect Wallet State */}
         {!isConnected ? (
-          <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
-            <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">Connect Your Wallet</h2>
-            <p className="text-slate-400 mb-6">
-              You need to connect your MetaMask wallet to submit a proposal
-            </p>
-            <button
-              onClick={connectWallet}
-              disabled={isConnecting}
-              className="px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
-                hover:from-pink-600 hover:to-pink-700 transition-all duration-200
-                hover:shadow-lg hover:shadow-pink-500/30
-                disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isConnecting ? 'Connecting...' : 'Connect MetaMask'}
-            </button>
-          </div>
+          <ConnectState
+            title="Connect Your Wallet"
+            description="You need to connect your wallet to submit a proposal"
+            icon={<EmptyIcon />}
+            onConnect={connectWallet}
+            isConnecting={isConnecting}
+          />
         ) : (
           <>
             {/* Result Message */}

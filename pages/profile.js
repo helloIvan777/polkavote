@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import ConnectState, { ProfileIcon } from '../components/ConnectState';
 import { useWeb3 } from '../context/Web3Context';
 import { fetchAllProjects, getContribution, truncateAddress } from '../utils/web3';
 
@@ -76,27 +77,13 @@ export default function ProfilePage() {
         </div>
 
         {!isConnected ? (
-          <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 text-center">
-            <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">Connect Your Wallet</h2>
-            <p className="text-slate-400 mb-6">
-              Connect to view your profile and activity
-            </p>
-            <button
-              onClick={() => connectWallet()}
-              disabled={isConnecting}
-              className="px-6 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-xl font-medium
-                hover:from-pink-600 hover:to-pink-700 transition-all duration-200
-                hover:shadow-lg hover:shadow-pink-500/30
-                disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isConnecting ? 'Connecting...' : 'Connect MetaMask'}
-            </button>
-          </div>
+          <ConnectState
+            title="Connect Your Wallet"
+            description="Connect to view your profile and activity"
+            icon={<ProfileIcon />}
+            onConnect={() => connectWallet()}
+            isConnecting={isConnecting}
+          />
         ) : isLoading ? (
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700/50 animate-pulse">
             <div className="flex items-center gap-4 mb-6">
