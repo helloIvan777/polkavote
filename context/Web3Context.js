@@ -3,9 +3,23 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
 
+// EIP-6963 Event Types
+/** @type {CustomEventInit} */
+const eip6963AnnounceEvent = {
+  detail: {
+    info: {
+      uuid: '',
+      name: '',
+      icon: '',
+      rdns: '',
+    },
+    provider: null,
+  },
+};
+
 // localStorage keys
-const STORAGE_KEY      = 'shouldConnect';     // 'true' when user has connected
-const STORAGE_KEY_OLD  = 'polkavote_connected'; // legacy key — migrated on first read
+const STORAGE_KEY      = 'shouldConnect';
+const STORAGE_KEY_OLD  = 'polkavote_connected';
 const WALLET_TYPE_KEY  = 'polkavote_wallet_type';
 
 // Moonbase Alpha Chain ID
@@ -23,7 +37,9 @@ export function Web3Provider({ children }) {
   const [signer, setSigner] = useState(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [walletType, setWalletType] = useState(null); // 'metamask' or 'phantom'
+  const [walletType, setWalletType] = useState(null);
+  const [walletProviders, setWalletProviders] = useState([]); // EIP-6963 discovered providers
+  const [selectedProviderDetail, setSelectedProviderDetail] = useState(null);
 
   /**
    * Get all available EVM providers
@@ -272,27 +288,96 @@ export function Web3Provider({ children }) {
   }, [getPhantomEVMProvider, switchToMoonbaseAlpha]);
 
   /**
-   * Main connect wallet function
-   * @param {string} type - 'metamask' or 'phantom' (optional, defaults to metamask)
+   * Connect using EIP-6963 provider detail
+   * @param {Object} providerDetail - { info: { uuid, name, icon, rdns }, provider }
    */
-  const connectWallet = useCallback(async (type) => {
+  const connectWithProvider = useCallback(async (providerDetail) => {
+    console.log('[Web3Context] Connecting with EIP-6963 provider:', providerDetail.info.name);
+
+    if (!providerDetail?.provider) {
+      throw new Error('No provider supplied');
+    }
+
+    setIsConnecting(true);
+
+    try {
+      const { info, provider: injectedProvider } = providerDetail;
+
+      // Request account access
+      const accounts = await injectedProvider.request({ method: 'eth_requestAccounts' });
+
+      if (accounts.length === 0) {
+        throw new Error('No accounts found. Please unlock your wallet.');
+      }
+
+      const address = accounts[0];
+      const browserProvider = new ethers.BrowserProvider(injectedProvider);
+      const signerInstance = await browserProvider.getSigner();
+      const network = await browserProvider.getNetwork();
+
+      console.log('[Web3Context] Connected via EIP-6963:', address, 'Chain:', Number(network.chainId));
+
+      // Check and switch to Moonbase Alpha if needed
+      if (Number(network.chainId) !== MOONBASE_ALPHA_CHAIN_ID) {
+        console.log('[Web3Context] Not on Moonbase Alpha, switching...');
+        await switchToMoonbaseAlpha(injectedProvider);
+
+        const updatedNetwork = await browserProvider.getNetwork();
+        setChainId(Number(updatedNetwork.chainId));
+      } else {
+        setChainId(Number(network.chainId));
+      }
+
+      setAccount(address);
+      setProvider(browserProvider);
+      setSigner(signerInstance);
+      setIsConnected(true);
+      setWalletType(info.rdns || info.name.toLowerCase());
+      setSelectedProviderDetail(providerDetail);
+
+      localStorage.setItem(STORAGE_KEY, 'true');
+      localStorage.setItem(WALLET_TYPE_KEY, info.rdns || info.name.toLowerCase());
+
+      setShowWalletModal(false);
+
+      return { address, chainId: Number(network.chainId), walletType: info.name };
+    } catch (error) {
+      console.error('[Web3Context] EIP-6963 connection error:', error);
+      if (error.code === 4001) {
+        throw new Error('Connection rejected by user');
+      }
+      throw error;
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [switchToMoonbaseAlpha]);
+
+  /**
+   * Main connect wallet function
+   * @param {string|Object} target - 'metamask', 'phantom', or EIP-6963 provider detail
+   */
+  const connectWallet = useCallback(async (target) => {
     console.log('[Web3Context] connectWallet called! Button clicked!');
-    
-    // If already connected and no explicit wallet type requested, do nothing
-    if (isConnected && !['metamask', 'phantom'].includes(type)) {
+
+    // If already connected and no explicit target, skip
+    if (isConnected && !target) {
       console.log('[Web3Context] Already connected, skipping');
       return null;
     }
 
-    console.log('[Web3Context] connectWallet called with type:', type || 'metamask (default)');
     setIsConnecting(true);
 
     try {
-      // Default to MetaMask if no type specified
-      const walletTypeToUse = type === 'phantom' ? 'phantom' : 'metamask';
-      
-      console.log('[Web3Context] Connecting to:', walletTypeToUse);
-      
+      // If target is a provider detail (EIP-6963), use it directly
+      if (target?.info && target?.provider) {
+        console.log('[Web3Context] Connecting via EIP-6963 provider:', target.info.name);
+        return await connectWithProvider(target);
+      }
+
+      // Otherwise use legacy string-based connection
+      const walletTypeToUse = target === 'phantom' ? 'phantom' : 'metamask';
+      console.log('[Web3Context] Connecting to (legacy):', walletTypeToUse);
+
       if (walletTypeToUse === 'metamask') {
         await connectMetaMask();
       } else {
@@ -310,7 +395,7 @@ export function Web3Provider({ children }) {
     } finally {
       setIsConnecting(false);
     }
-  }, [isConnected, connectMetaMask, connectPhantomEVM, account, walletType]);
+  }, [isConnected, connectMetaMask, connectPhantomEVM, connectWithProvider, account, walletType]);
 
   const disconnectWallet = useCallback(() => {
     console.log('[Web3Context] Disconnecting wallet...');
@@ -452,6 +537,54 @@ export function Web3Provider({ children }) {
   useEffect(() => {
     stateRef.current = { account, provider, walletType, disconnectWallet };
   });
+
+  /**
+   * EIP-6963: Multi Injected Provider Discovery
+   * Listens for wallet provider announcements and stores them
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const knownProviders = new Map();
+
+    /**
+     * Handle EIP-6963 provider announcement
+     */
+    const handleAnnounceProvider = (event) => {
+      const { detail } = event;
+      const { info, provider } = detail;
+
+      console.log('[Web3Context] EIP-6963 Provider announced:', info.name);
+
+      // Store provider in map (prevents duplicates by UUID)
+      knownProviders.set(info.uuid, { info, provider });
+
+      // Update state with all discovered providers
+      setWalletProviders(Array.from(knownProviders.values()));
+    };
+
+    /**
+     * Request all wallets to announce themselves
+     */
+    const requestProviders = () => {
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+    };
+
+    // Listen for EIP-6963 announcements
+    window.addEventListener('eip6963:announceProvider', handleAnnounceProvider);
+
+    // Request all providers to announce themselves
+    requestProviders();
+
+    // Fallback: request again after a short delay for wallets that load slowly
+    const fallbackTimeout = setTimeout(requestProviders, 100);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('eip6963:announceProvider', handleAnnounceProvider);
+      clearTimeout(fallbackTimeout);
+    };
+  }, []);
 
   /**
    * Handle account changes — stable identity (no deps on mutable state).
@@ -614,7 +747,9 @@ export function Web3Provider({ children }) {
     showAccountMenu,
     showWalletModal,
     walletType,
+    walletProviders, // EIP-6963: Array of discovered wallet providers
     connectWallet,
+    connectWithProvider, // EIP-6963: Connect with specific provider
     disconnectWallet,
     switchAccount,
     getSigner,
@@ -634,7 +769,9 @@ export function Web3Provider({ children }) {
     showAccountMenu,
     showWalletModal,
     walletType,
+    walletProviders,
     connectWallet,
+    connectWithProvider,
     disconnectWallet,
     switchAccount,
     getSigner,

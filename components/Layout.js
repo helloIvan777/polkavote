@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PolkaVoteLogo, ConnectWalletButton } from '../components/Header';
+import WalletSelectorModal from '../components/WalletSelectorModal';
+import { useWeb3 } from '../context/Web3Context';
 
 /**
  * Returns true once the user has scrolled the main content area at least 1px.
@@ -181,6 +183,7 @@ export default function Layout({ children }) {
   const pathname = usePathname();
   const scrollRef = React.useRef(null);
   const scrolled = useScrolled(scrollRef);
+  const { showWalletModal, closeWalletModal } = useWeb3();
 
   return (
     <div className="h-screen bg-slate-900 flex overflow-hidden">
@@ -224,6 +227,13 @@ export default function Layout({ children }) {
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav pathname={pathname} />
+
+      {/* 
+       * WALLET SELECTOR MODAL - Rendered at ROOT level of Layout
+       * This ensures it's NOT inside Header/Nav positioning context
+       * It will appear centered on the entire viewport
+       */}
+      <WalletSelectorModal isOpen={showWalletModal} onClose={closeWalletModal} />
     </div>
   );
 }

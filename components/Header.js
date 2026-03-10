@@ -26,27 +26,17 @@ export function PolkaVoteLogo({ className = "w-10 h-10" }) {
 }
 
 /**
- * Connect Wallet Button - Simplified
- * Direct connection without modal or dropdown
+ * Connect Wallet Button - Triggers modal from Web3Context
  */
 export function ConnectWalletButton() {
   const {
     account,
-    chainId,
     isConnected,
     isConnecting,
-    connectWallet,
+    openWalletModal,
+    showWalletModal,
     disconnectWallet,
   } = useWeb3();
-
-  const handleConnect = async () => {
-    console.log('[Header] Connect Wallet button clicked!');
-    try {
-      await connectWallet();
-    } catch (error) {
-      console.error('[Header] Connection error:', error);
-    }
-  };
 
   if (isConnected && account) {
     return (
@@ -65,13 +55,13 @@ export function ConnectWalletButton() {
 
   return (
     <button
-      onClick={handleConnect}
+      onClick={openWalletModal}
       disabled={isConnecting}
       className="px-6 py-2 rounded-full font-bold text-sm
         bg-gradient-to-r from-pink-500 to-pink-600 text-white
         hover:from-pink-600 hover:to-pink-700
         transition-all duration-200
-        disabled:opacity-50 disabled:cursor-not-allowed
+        disabled:opacity-50 disabled:cursor-wait
         hover:shadow-lg hover:shadow-pink-500/30"
     >
       {isConnecting ? (
