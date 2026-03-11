@@ -6,130 +6,382 @@
 import { ethers } from 'ethers';
 
 export const POLKAFUND_ABI = [
-  // ── Write functions ──────────────────────────────────────────────────────
   {
-    "inputs": [
-      { "internalType": "string",  "name": "_title",          "type": "string"  },
-      { "internalType": "string",  "name": "_description",    "type": "string"  },
-      { "internalType": "string",  "name": "_category",       "type": "string"  },
-      { "internalType": "uint256", "name": "_targetAmount",   "type": "uint256" },
-      { "internalType": "uint256", "name": "_durationInDays", "type": "uint256" }
-    ],
+    "type": "function",
     "name": "addProject",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "_projectId", "type": "uint256" }],
-    "name": "contribute",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "_projectId", "type": "uint256" }],
-    "name": "withdrawFunds",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "_projectId", "type": "uint256" }],
-    "name": "claimRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // ── View functions ───────────────────────────────────────────────────────
-  {
-    "inputs": [],
-    "name": "getAllProjects",
+    "inputs": [
+      {
+        "name": "_title",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_description",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_category",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_targetAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_durationInDays",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
-      { "internalType": "uint256[]", "name": "ids",            "type": "uint256[]" },
-      { "internalType": "address[]", "name": "creators",       "type": "address[]" },
-      { "internalType": "string[]",  "name": "titles",         "type": "string[]"  },
-      { "internalType": "string[]",  "name": "descriptions",   "type": "string[]"  },
-      { "internalType": "string[]",  "name": "categories",     "type": "string[]"  },
-      { "internalType": "uint256[]", "name": "targetAmounts",  "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "raisedAmounts",  "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "timestamps",     "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "deadlines",      "type": "uint256[]" },
-      { "internalType": "bool[]",    "name": "withdrawnFlags", "type": "bool[]"    }
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "stateMutability": "nonpayable"
   },
   {
-    "inputs": [],
-    "name": "getProjectCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    // Public mapping auto-getter: contributions[projectId][address] => uint256
+    "type": "function",
+    "name": "claimRefund",
     "inputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "address", "name": "", "type": "address" }
+      {
+        "name": "_projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "contribute",
+    "inputs": [
+      {
+        "name": "_projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
     "name": "contributions",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // ── Events ───────────────────────────────────────────────────────────────
-  {
-    "anonymous": false,
     "inputs": [
-      { "indexed": true,  "internalType": "uint256", "name": "projectId",    "type": "uint256" },
-      { "indexed": true,  "internalType": "address", "name": "creator",      "type": "address" },
-      { "indexed": false, "internalType": "string",  "name": "title",        "type": "string"  },
-      { "indexed": false, "internalType": "uint256", "name": "targetAmount", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "deadline",     "type": "uint256" }
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    "name": "ProjectCreated",
-    "type": "event"
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true,  "internalType": "uint256", "name": "projectId",      "type": "uint256" },
-      { "indexed": true,  "internalType": "address", "name": "backer",         "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount",         "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newRaisedAmount","type": "uint256" }
+    "type": "function",
+    "name": "getAllProjects",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple[]",
+        "internalType": "struct PolkaFund.Project[]",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "creator",
+            "type": "address",
+            "internalType": "address payable"
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "category",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "targetAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "currentAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "active",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
     ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProject",
+    "inputs": [
+      {
+        "name": "_id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct PolkaFund.Project",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "creator",
+            "type": "address",
+            "internalType": "address payable"
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "category",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "targetAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "currentAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "active",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProjectCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "withdrawFunds",
+    "inputs": [
+      {
+        "name": "_projectId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
     "name": "ContributionMade",
-    "type": "event"
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "backer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newCurrentAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true,  "internalType": "uint256", "name": "projectId", "type": "uint256" },
-      { "indexed": true,  "internalType": "address", "name": "creator",   "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount",    "type": "uint256" }
-    ],
+    "type": "event",
     "name": "FundsWithdrawn",
-    "type": "event"
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
-    "anonymous": false,
+    "type": "event",
+    "name": "ProjectCreated",
     "inputs": [
-      { "indexed": true,  "internalType": "uint256", "name": "projectId", "type": "uint256" },
-      { "indexed": true,  "internalType": "address", "name": "backer",    "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount",    "type": "uint256" }
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "targetAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
     ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RefundClaimed",
-    "type": "event"
+    "inputs": [
+      {
+        "name": "projectId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "backer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   }
 ];
 
-export const CONTRACT_ADDRESS = "0x8c26a85029118ebC1bc50F9B9a7CD1ea75a8f496";
+const RAW_ADDRESS = "0x294F5b9d6cE8dA899452b9F8F72b4cdAF7e4Ac9A";
+export let CONTRACT_ADDRESS;
+
+try {
+  CONTRACT_ADDRESS = ethers.getAddress(RAW_ADDRESS.trim());
+  console.log("Validated Address:", CONTRACT_ADDRESS);
+} catch (e) {
+  console.error("CRITICAL: The address provided is NOT a valid Ethereum address!");
+  CONTRACT_ADDRESS = RAW_ADDRESS.trim();
+}
 
 // Moonbase Alpha RPC endpoints
 const RPC_URLS = [
-  "https://moonbase-alpha.public.blastapi.io",
   "https://rpc.api.moonbase.moonbeam.network",
+  "https://moonbeam-alpha.api.onfinality.io/public",
 ];
 
 /** BrowserProvider (wallet) when available, else JsonRpc fallback. */
@@ -204,11 +456,11 @@ function classifyError(error, context = 'operation') {
 export async function addProject(title, description, category, targetAmountDev, durationInDays, signer) {
   console.log('[web3.js] addProject called:', { title, category, targetAmountDev, durationInDays });
 
-  if (!title?.trim())       throw new Error('Title is required');
-  if (title.length > 200)   throw new Error('Title too long (max 200 chars)');
+  if (!title?.trim()) throw new Error('Title is required');
+  if (title.length > 200) throw new Error('Title too long (max 200 chars)');
   if (!description?.trim()) throw new Error('Description is required');
   if (description.length > 1000) throw new Error('Description too long (max 1000 chars)');
-  if (!category?.trim())    throw new Error('Category is required');
+  if (!category?.trim()) throw new Error('Category is required');
   if (!targetAmountDev || parseFloat(targetAmountDev) <= 0) throw new Error('Target amount must be greater than 0');
   if (!durationInDays || durationInDays < 1 || durationInDays > 90) throw new Error('Duration must be 1–90 days');
   if (!signer) throw new Error('Wallet not connected. Please connect your wallet first.');
@@ -340,37 +592,32 @@ export async function fetchAllProjects() {
       const contract = createReadOnlyContract(rpcUrl);
       const result = await contract.getAllProjects();
 
-      const [
-        ids, creators, titles, descriptions, categories,
-        targetAmounts, raisedAmounts, timestamps, deadlines, withdrawnFlags
-      ] = result;
-
-      if (!ids || ids.length === 0) {
+      if (!result || result.length === 0) {
         console.log('[web3.js] No projects found — empty array.');
         return [];
       }
 
-      console.log('[web3.js] Fetched', ids.length, 'projects via', rpcUrl);
+      console.log('[web3.js] Fetched', result.length, 'projects via', rpcUrl);
 
-      return ids.map((id, i) => {
-        const targetWei  = targetAmounts[i];
-        const raisedWei  = raisedAmounts[i];
-        const targetDev  = parseFloat(ethers.formatEther(targetWei));
-        const raisedDev  = parseFloat(ethers.formatEther(raisedWei));
+      return result.map((p) => {
+        const targetWei = p.targetAmount;
+        const raisedWei = p.currentAmount;
+        const targetDev = parseFloat(ethers.formatEther(targetWei));
+        const raisedDev = parseFloat(ethers.formatEther(raisedWei));
 
         return {
-          id:           Number(id),
-          creator:      creators[i],
-          title:        titles[i],
-          description:  descriptions[i],
-          category:     categories[i] || 'Tech',
+          id: Number(p.id),
+          creator: p.creator,
+          title: p.title,
+          description: p.description,
+          category: p.category || 'Tech',
           targetAmount: targetDev,   // in DEV, float
           raisedAmount: raisedDev,   // in DEV, float
-          targetWei:    targetWei,   // keep raw BigInt for contract calls
-          raisedWei:    raisedWei,
-          timestamp:    Number(timestamps[i]) * 1000, // ms
-          deadline:     Number(deadlines[i])  * 1000, // ms
-          withdrawn:    withdrawnFlags[i],
+          targetWei: targetWei,   // keep raw BigInt for contract calls
+          raisedWei: raisedWei,
+          timestamp: Number(p.id), // fallback timestamp mapping for sorting
+          deadline: Number(p.deadline) * 1000, // ms
+          withdrawn: !p.active,
         };
       });
     } catch (err) {
@@ -380,13 +627,23 @@ export async function fetchAllProjects() {
   }
 
   const msg = lastError?.message?.toLowerCase() ?? '';
+  console.error("Fetch Error:", lastError?.message);
+
+  if (!ethers.isAddress(CONTRACT_ADDRESS)) {
+    throw new Error("Invalid Address Format");
+  }
+
   if (msg.includes('bad address') || msg.includes('invalid address') || msg.includes('could not decode')) {
-    throw new Error(`Invalid contract address (${CONTRACT_ADDRESS}). Verify on moonbase.moonscan.io`);
+    // If it's a technically valid address format but fails decoding, it could be a wrong contract on the chain,
+    // but the task specifically requested to ONLY show network error if the isAddress is true.
+    throw new Error("RPC Connection Failed. Please check your internet or try a different RPC node.");
   }
+
   if (msg.includes('failed to fetch') || msg.includes('fetch failed') || msg.includes('etimedout')) {
-    throw new Error('Could not reach Moonbase Alpha. Check your internet connection.');
+    throw new Error("RPC Connection Failed. Please check your internet or try a different RPC node.");
   }
-  throw lastError;
+
+  throw new Error("RPC Connection Failed. Please check your internet or try a different RPC node.");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,14 +685,14 @@ export function formatDEV(amount) {
 }
 
 export function formatRelativeTime(timestamp) {
-  const now  = Date.now();
+  const now = Date.now();
   const diff = now - timestamp;
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
-  const hours   = Math.floor(minutes / 60);
-  const days    = Math.floor(hours / 24);
-  if (days    > 0) return `${days}d ago`;
-  if (hours   > 0) return `${hours}h ago`;
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
   if (minutes > 0) return `${minutes}m ago`;
   return 'Just now';
 }

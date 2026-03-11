@@ -215,8 +215,10 @@ export function Web3Provider({ children }) {
       
       // Re-fetch network after switch
       const updatedNetwork = await browserProvider.getNetwork();
+      console.log('[Web3Context] Current ChainID after switch:', Number(updatedNetwork.chainId));
       setChainId(Number(updatedNetwork.chainId));
     } else {
+      console.log('[Web3Context] Current ChainID:', Number(network.chainId));
       setChainId(Number(network.chainId));
     }
 
@@ -266,8 +268,10 @@ export function Web3Provider({ children }) {
         
         // Re-fetch network after switch
         const updatedNetwork = await browserProvider.getNetwork();
+        console.log('[Web3Context] Current ChainID after switch:', Number(updatedNetwork.chainId));
         setChainId(Number(updatedNetwork.chainId));
       } else {
+        console.log('[Web3Context] Current ChainID:', Number(network.chainId));
         setChainId(Number(network.chainId));
       }
 
@@ -323,8 +327,10 @@ export function Web3Provider({ children }) {
         await switchToMoonbaseAlpha(injectedProvider);
 
         const updatedNetwork = await browserProvider.getNetwork();
+        console.log('[Web3Context] Current ChainID after switch:', Number(updatedNetwork.chainId));
         setChainId(Number(updatedNetwork.chainId));
       } else {
+        console.log('[Web3Context] Current ChainID:', Number(network.chainId));
         setChainId(Number(network.chainId));
       }
 

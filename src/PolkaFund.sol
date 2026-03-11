@@ -142,44 +142,12 @@ contract PolkaFund {
 
     /// @notice Returns arrays holding all data for all projects
     /// @dev Returning parallel arrays ensures compatibility with varied clients and easy iteration.
-    function getAllProjects()
-        public
-        view
-        returns (
-            uint256[] memory ids,
-            address[] memory creators,
-            string[] memory titles,
-            string[] memory descriptions,
-            string[] memory categories,
-            uint256[] memory targetAmounts,
-            uint256[] memory currentAmounts,
-            uint256[] memory deadlines,
-            bool[] memory activeFlags
-        )
-    {
-        uint256 n = projects.length;
-        ids = new uint256[](n);
-        creators = new address[](n);
-        titles = new string[](n);
-        descriptions = new string[](n);
-        categories = new string[](n);
-        targetAmounts = new uint256[](n);
-        currentAmounts = new uint256[](n);
-        deadlines = new uint256[](n);
-        activeFlags = new bool[](n);
-
-        for (uint256 i = 0; i < n; i++) {
-            Project storage p = projects[i];
-            ids[i] = p.id;
-            creators[i] = p.creator;
-            titles[i] = p.title;
-            descriptions[i] = p.description;
-            categories[i] = p.category;
-            targetAmounts[i] = p.targetAmount;
-            currentAmounts[i] = p.currentAmount;
-            deadlines[i] = p.deadline;
-            activeFlags[i] = p.active;
+    function getAllProjects() public view returns (Project[] memory) {
+        Project[] memory allProjects = new Project[](projects.length);
+        for (uint256 i = 0; i < projects.length; i++) {
+            allProjects[i] = projects[i];
         }
+        return allProjects;
     }
 
     /// @notice Returns total number of projects
