@@ -23,19 +23,17 @@ forge build
 
 # Run tests
 forge test -vv
-
-
+```
 2. Frontend
-
+```bash
 npm install
 npm run dev
-
-
+```
 📄 License
 
 This project is licensed under the MIT License.
-
-
+```bash
 **Let's build a safer Polkadot ecosystem together!** 🚀
 
 #Polkadot #Moonbeam #Web3 #AI #Solidity #DoraHacks #Blockchain #GeminiAI #Foundry
+```
