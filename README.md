@@ -46,9 +46,3 @@ If you encounter the `! [rejected] (fetch first)` error when pushing, use the fo
 git pull --rebase origin main
 git push origin main
 ```
-
----
-
-### 🇷🇺 Описание проекта
-
-Децентрализованная краудфандинговая платформа нового поколения, построенная на Moonbeam (Moonbase Alpha). Включает встроенную ИИ-модерацию проектов с использованием Google Gemini 1.5 Flash для предотвращения мошенничества и обеспечения безопасности пользователей.
