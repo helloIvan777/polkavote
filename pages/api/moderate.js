@@ -12,8 +12,8 @@ export default async function handler(req, res) {
   const incomingSnippet = `${title || ''} ${description || ''}`.substring(0, 30);
   console.log(`[Moderation] Incoming request snippet: "${incomingSnippet}..."`);
 
-  if (!title || !description || title.trim().length < 20 || description.trim().length < 20) {
-    return res.status(200).json({ safe: false, reason: 'Input is too short or low effort.' });
+  if (!title || !description || title.trim().length < 3 || description.trim().length < 10) {
+    return res.status(200).json({ safe: false, reason: 'Input is too short. Title needs 3+ chars, Description 10+ chars.' });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -26,7 +26,10 @@ export default async function handler(req, res) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const systemInstruction = `You are a strict Web3 Security Guard. Reject any project that smells like a scam, low-effort spam, or phishing. Keywords like 'free money', 'guaranteed', 'scam', or '100% profit' are immediate blocks. Analyze the INTENT.
+    const systemInstruction = `You are a Helpful Project Mentor checking crowdfunding proposals. 
+Analyze the INTENT. Short descriptions are acceptable if they clearly state a project goal. 
+Only block actual scams, illegal content, phishing, or repetitive gibberish. Keywords like 'free money', 'guaranteed', 'scam', or '100% profit' should heavily flag a project. 
+If you reject a project, you MUST provide a constructive tip on how the user can improve their text in the "reason" field (e.g., "Please add more details about how the money will be spent").
 Force Gemini to return ONLY a raw JSON object: {"safe": boolean, "reason": "string"}. Do not use markdown blocks, do not include any introductory text, only the JSON object.`;
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction });

@@ -26,9 +26,9 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
 
   const validate = () => {
     const e = {};
-    if (!title?.trim())            e.title       = 'Title is required';
+    if (!title?.trim() || title.trim().length < 3) e.title = 'Title must be at least 3 characters';
     else if (title.length > 200)   e.title       = 'Title must be ≤ 200 characters';
-    if (!description?.trim())      e.description = 'Description is required';
+    if (!description?.trim() || description.trim().length < 10) e.description = 'Description must be at least 10 characters';
     else if (description.length > 1000) e.description = 'Description must be ≤ 1000 characters';
     const amt = parseFloat(targetAmount);
     if (!targetAmount || isNaN(amt) || amt <= 0)
@@ -231,12 +231,18 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
             </label>
             <input
               type="text" id="proj-title" value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (errors.title) setErrors((prev) => ({ ...prev, title: null, form: null, details: null }));
+              }}
               placeholder="Give your project a compelling title…"
-              className={INPUT_CLS(!!errors.title)}
+              className={INPUT_CLS(!!errors.title || (title.length > 0 && title.trim().length < 3))}
               maxLength={200}
             />
-            {errors.title && <p className="mt-1 text-sm text-red-400">{errors.title}</p>}
+            {errors.title && <p className="mt-1 text-sm text-red-500">{errors.title}</p>}
+            {title.length > 0 && title.trim().length < 3 && !errors.title && (
+              <p className="mt-1 text-sm text-yellow-500/80">Title must be at least 3 characters</p>
+            )}
             <p className="mt-1 text-xs text-slate-500 text-right">{title.length}/200</p>
           </div>
 
@@ -247,13 +253,19 @@ export default function SubmitProposalModal({ isOpen, onClose, onSuccess }) {
             </label>
             <textarea
               id="proj-desc" value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (errors.description) setErrors((prev) => ({ ...prev, description: null, form: null, details: null }));
+              }}
               placeholder="Describe your project. What will the funds be used for?"
               rows={4}
-              className={`${INPUT_CLS(!!errors.description)} resize-none`}
+              className={`${INPUT_CLS(!!errors.description || (description.length > 0 && description.trim().length < 10))} resize-none`}
               maxLength={1000}
             />
-            {errors.description && <p className="mt-1 text-sm text-red-400">{errors.description}</p>}
+            {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
+            {description.length > 0 && description.trim().length < 10 && !errors.description && (
+              <p className="mt-1 text-sm text-yellow-500/80">Description must be at least 10 characters</p>
+            )}
             <p className="mt-1 text-xs text-slate-500 text-right">{description.length}/1000</p>
           </div>
 
