@@ -1,66 +1,41 @@
-## Foundry
+# 🚀 PolkaFund: AI-Powered Crowdfunding
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+PolkaFund is a decentralized crowdfunding platform built for the **Moonbeam** ecosystem (Moonbase Alpha). It features a unique **AI Iron Shield** powered by Google Gemini to ensure project quality and security.
 
-Foundry consists of:
+## 🌟 Key Features
+- **AI Moderation:** Real-time semantic analysis of project proposals to prevent scams.
+- **Foundry-Tested:** 100% test coverage including Fuzz testing for smart contract security.
+- **Smart UX:** Built-in wallet connection logic and dynamic project filtering.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## 🛠 Tech Stack
+- **Smart Contracts:** Solidity 0.8.20
+- **Frontend:** Next.js, Tailwind CSS, Ethers.js
+- **Backend:** Node.js (Next API routes)
+- **AI Integration:** Google Gemini 1.5 Flash
+- **Tools:** Foundry, Hardhat
 
-## Documentation
+## 🚀 Getting Started
 
-https://book.getfoundry.sh/
+### 1. Smart Contracts (Foundry)
+```bash
+# Build contracts
+forge build
 
-## Usage
+# Run tests
+forge test -vv
 
-### Build
 
-```shell
-$ forge build
-```
+2. Frontend
 
-### Test
+npm install
+npm run dev
 
-```shell
-$ forge test
-```
 
-### Format
+📄 License
 
-```shell
-$ forge fmt
-```
+This project is licensed under the MIT License.
 
-### Gas Snapshots
 
-```shell
-$ forge snapshot
-```
+**Let's build a safer Polkadot ecosystem together!** 🚀
 
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+#Polkadot #Moonbeam #Web3 #AI #Solidity #DoraHacks #Blockchain #GeminiAI #Foundry
