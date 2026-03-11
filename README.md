@@ -1,39 +1,54 @@
 # 🚀 PolkaFund: AI-Powered Crowdfunding
 
-PolkaFund is a decentralized crowdfunding platform built for the **Moonbeam** ecosystem (Moonbase Alpha). It features a unique **AI Iron Shield** powered by Google Gemini to ensure project quality and security.
+> "A next-generation decentralized crowdfunding platform built on Moonbeam (Moonbase Alpha) with Gemini AI moderation."
 
-## 🌟 Key Features
-- **AI Moderation:** Real-time semantic analysis of project proposals to prevent scams.
-- **Foundry-Tested:** 100% test coverage including Fuzz testing for smart contract security.
-- **Smart UX:** Built-in wallet connection logic and dynamic project filtering.
+## 🌟 Core Value Propositions
 
-## 🛠 Tech Stack
-- **Smart Contracts:** Solidity 0.8.20
-- **Frontend:** Next.js, Tailwind CSS, Ethers.js
-- **Backend:** Node.js (Next API routes)
-- **AI Integration:** Google Gemini 1.5 Flash
-- **Tools:** Foundry, Hardhat
+*   🛡️ **AI Iron Shield**: Google Gemini 1.5 Flash analyzes projects before they hit the blockchain, effectively preventing scams and ensuring only high-quality proposals are launched.
+*   🧪 **Professional Testing**: Built with 100% Foundry test coverage and robust Fuzz testing for resilient, secure smart contracts.
+*   📱 **Seamless UX**: Features a built-in "Connect Wallet" flow directly inside modals alongside dynamic, frictionless category filtering.
 
-## 🚀 Getting Started
+## 🛠️ Tech Stack
 
-### 1. Smart Contracts (Foundry)
+*   **Smart Contracts**: Solidity 0.8.20
+*   **Frontend**: Next.js 14, Tailwind CSS, Ethers.js
+*   **AI**: Google Gemini API
+*   **Environment**: Moonbase Alpha (ChainID 1287)
+
+## 📦 Installation & Usage
+
+### Smart Contracts (Foundry)
+To build and test the smart contracts:
 ```bash
-# Build contracts
 forge build
-
-# Run tests
-forge test -vv
+forge test
 ```
-2. Frontend
+
+### Frontend
+To install dependencies and run the development server:
 ```bash
 npm install
 npm run dev
 ```
-📄 License
 
-This project is licensed under the MIT License.
+⚠️ **Requirement**: You must create a `.env.local` file in the root directory and add your `GEMINI_API_KEY` for the AI moderation features to function correctly.
+
+## 📊 Project Metadata
+
+*   **Contract Address**: `0x338146CD7a2a38ff23e256F65F6E459302E2666A`
+*   **DoraHacks**: [Link to DoraHacks submission](https://dorahacks.io) *(Update with actual link)*
+
+## 🔧 Git Troubleshooting
+
+If you encounter the `! [rejected] (fetch first)` error when pushing, use the following commands to resolve the issue:
+
 ```bash
-**Let's build a safer Polkadot ecosystem together!** 🚀
-
-#Polkadot #Moonbeam #Web3 #AI #Solidity #DoraHacks #Blockchain #GeminiAI #Foundry
+git pull --rebase origin main
+git push origin main
 ```
+
+---
+
+### 🇷🇺 Описание проекта
+
+Децентрализованная краудфандинговая платформа нового поколения, построенная на Moonbeam (Moonbase Alpha). Включает встроенную ИИ-модерацию проектов с использованием Google Gemini 1.5 Flash для предотвращения мошенничества и обеспечения безопасности пользователей.
