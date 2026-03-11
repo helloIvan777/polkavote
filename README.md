@@ -1,4 +1,4 @@
-# 🚀 PolkaFund: AI-Powered Crowdfunding
+# 🚀 PolkaVote: AI-Powered Crowdfunding
 
 > "A next-generation decentralized crowdfunding platform built on Moonbeam (Moonbase Alpha) with Gemini AI moderation."
 
